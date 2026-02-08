@@ -1,0 +1,41 @@
+# LLM-readiness scoring rubric (weights sum to 1.0; each dimension scored 0-10)
+dimensions:
+  - id: completeness
+    name: Completeness
+    weight: 0.20
+    method: deterministic
+  - id: structural_clarity
+    name: Structural Clarity
+    weight: 0.15
+    method: deterministic
+  - id: spec_precision
+    name: Specification Precision
+    weight: 0.15
+    method: deterministic
+  - id: schema_readiness
+    name: Schema.org Readiness
+    weight: 0.10
+    method: deterministic
+  - id: unique_differentiators
+    name: Unique Differentiators
+    weight: 0.10
+    method: llm_rubric
+  - id: buyer_answerability
+    name: Buyer-Question Answerability
+    weight: 0.15
+    method: llm_rubric
+  - id: consistency
+    name: Consistency
+    weight: 0.10
+    method: deterministic
+  - id: freshness
+    name: Freshness Signals
+    weight: 0.05
+    method: deterministic
+
+grade_thresholds:
+  A: 85
+  B: 70
+  C: 55
+  D: 40
+  F: 0

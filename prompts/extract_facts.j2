@@ -1,0 +1,33 @@
+You are extracting product facts from technical brochure content. Output only valid JSON.
+
+Rules:
+- Never guess. If a fact is not stated in the source, set value to "NOT_FOUND".
+- For every extracted fact, include evidence: the chunk_id(s) that support it and a short verbatim excerpt.
+- Use the exact chunk_id values provided (e.g. pdf-p1-c0, pdf-p2-c1).
+
+Source chunks (chunk_id, page, text):
+{% for chunk in chunks %}
+[{{ chunk.chunk_id }}] (page {{ chunk.page_number or 'N/A' }}) {{ chunk.section_heading or '' }}
+{{ chunk.text }}
+{% endfor %}
+
+Extract into this JSON structure. Use "NOT_FOUND" for any missing field. For lists (key_features, use_cases, specifications, certifications, compatibility), use arrays of objects with value, confidence, chunk_ids, verbatim_excerpt.
+
+{
+  "product_name": { "value": "... or NOT_FOUND", "confidence": "HIGH|MEDIUM|LOW", "chunk_ids": [], "verbatim_excerpt": "" },
+  "manufacturer": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "model_number": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "category": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "short_description": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "key_features": [ { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" } ],
+  "specifications": { "spec_name": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" } },
+  "use_cases": [ { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" } ],
+  "target_audience": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "pricing": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "certifications": [ { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" } ],
+  "compatibility": [ { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" } ],
+  "warranty": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" },
+  "support_info": { "value": "...", "confidence": "...", "chunk_ids": [], "verbatim_excerpt": "" }
+}
+
+Respond with only the JSON object, no markdown.

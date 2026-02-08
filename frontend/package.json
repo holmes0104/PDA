@@ -1,0 +1,29 @@
+{
+  "name": "pda-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:network": "next dev -H 0.0.0.0",
+    "dev:all": "concurrently \"npm run dev\" \"cd ../backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000\"",
+    "dev:all:network": "concurrently \"npm run dev:network\" \"cd ../backend && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\"",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^15.0.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "axios": "^1.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.3",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^15.0.7",
+    "concurrently": "^8.2.2"
+  }
+}

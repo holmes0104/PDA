@@ -1,0 +1,29 @@
+You are scoring a buyer-facing answer. The answer was generated using ONLY the provided variant content (no external knowledge). The "factsheet" below is the ground-truth product fact sheet. Score the answer accordingly.
+
+## Factsheet (ground truth)
+{{ factsheet_summary }}
+
+## Buyer prompt
+{{ buyer_prompt }}
+
+## Answer to score
+{{ response }}
+
+---
+
+Score the answer on these dimensions (0-10 each, integers only). Then list any hallucination flags: specific numbers, claims, or facts stated in the answer that are NOT supported by the factsheet (or that contradict it). If none, output an empty list.
+
+Respond with a single JSON object only, no markdown, no explanation:
+{
+  "factual_correctness": <0-10>,
+  "differentiator_coverage": <0-10>,
+  "constraint_correctness": <0-10>,
+  "hallucination_flags": ["claim 1", "claim 2", ...]
+}
+
+- factual_correctness: How accurate is the answer relative to the factsheet? 10 = all stated facts match factsheet; 0 = many errors or contradictions.
+- differentiator_coverage: For this specific prompt, how well does the answer cover the relevant differentiators from the factsheet? 10 = all relevant differentiators mentioned; 0 = none or wrong.
+- constraint_correctness: Are stated constraints/limitations correct per factsheet? 10 = correct and complete; 0 = wrong constraints or missing key ones where the prompt asks for them.
+- hallucination_flags: List each specific number, statistic, or claim in the answer that is NOT in the factsheet or contradicts it (e.g. "Claimed 5-year warranty but factsheet says 2 years"). Empty list if none.
+
+JSON only:

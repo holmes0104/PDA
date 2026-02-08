@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files first (better layer caching)
+COPY pyproject.toml requirements.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY pda ./pda
+COPY backend ./backend
+COPY prompts ./prompts
+COPY rubrics ./rubrics
+
+# Install the pda package in editable mode
+RUN pip install --no-cache-dir -e .
+
+# Create default data directory (Render mounts persistent disk at /data)
+RUN mkdir -p /data
+
+# Render injects PORT; default to 8000 for local Docker
+ENV PORT=8000
+ENV PDA_DATA_DIR=/data
+
+EXPOSE 8000
+
+# Use shell form so $PORT is expanded at runtime
+CMD uvicorn backend.main:app --host 0.0.0.0 --port $PORT

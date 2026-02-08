@@ -1,0 +1,21 @@
+# PDA — LLM Product Discoverability Auditor
+# Install: pip install -r requirements.txt  (or: pip install -e .)
+
+pydantic>=2.0
+pydantic-settings>=2.0
+typer[all]>=0.9
+pdfplumber>=0.10
+httpx>=0.25
+trafilatura>=1.6
+langchain-text-splitters>=0.2
+openai>=1.0
+anthropic>=0.18
+chromadb>=0.4
+jinja2>=3.1
+pyyaml>=6.0
+markdown>=3.5
+rich>=13.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+# Optional (tests + sample PDF): pip install reportlab

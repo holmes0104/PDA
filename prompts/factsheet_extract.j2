@@ -1,0 +1,36 @@
+You are extracting a Product Fact Sheet from the following evidence chunks only. Use ONLY information from these chunks. Output valid JSON that conforms exactly to the schema below.
+
+Chunks (chunk_id and text):
+{% for chunk in chunks %}
+[{{ chunk.chunk_id }}]
+{{ chunk.text }}
+{% endfor %}
+
+Rules:
+- For any field with no supporting evidence in the chunks above, use "NOT_FOUND" (for strings) or [] (for arrays/list fields) and use empty evidence_chunk_ids where applicable.
+- For every non-NOT_FOUND value and every list item, you MUST include the exact chunk_id(s) that support it in evidence_chunk_ids (use the chunk_id values from the list above, e.g. pdf-p1-c0).
+- Do not invent or guess. Only extract what is clearly stated.
+
+Output ONLY a single JSON object with this exact structure (no markdown, no code fence):
+
+{
+  "product_name": "<string or NOT_FOUND>",
+  "product_category": "<string or NOT_FOUND>",
+  "primary_use_cases": ["<string>", ...],
+  "target_buyer_roles": ["<string>", ...],
+  "key_specs": [
+    { "name": "", "value": "", "unit": "", "conditions": "", "evidence_chunk_ids": [] }
+  ],
+  "constraints": [
+    { "statement": "", "evidence_chunk_ids": [] }
+  ],
+  "differentiators": [
+    { "statement": "", "evidence_chunk_ids": [] }
+  ],
+  "certifications_standards": ["<string>", ...],
+  "integrations_interfaces": ["<string>", ...],
+  "maintenance_calibration": ["<string>", ...],
+  "source_coverage_summary": "<string or NOT_FOUND>"
+}
+
+Respond with only the JSON object.

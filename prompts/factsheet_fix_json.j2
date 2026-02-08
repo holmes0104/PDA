@@ -1,0 +1,14 @@
+The following JSON was rejected because it does not conform to the ProductFactSheet schema. Fix it so that:
+
+1. It is valid JSON (no trailing commas, no single quotes, valid escape sequences).
+2. It has exactly these top-level keys: product_name, product_category, primary_use_cases, target_buyer_roles, key_specs, constraints, differentiators, certifications_standards, integrations_interfaces, maintenance_calibration, source_coverage_summary.
+3. product_name and product_category and source_coverage_summary are strings (use "NOT_FOUND" if missing).
+4. primary_use_cases, target_buyer_roles, certifications_standards, integrations_interfaces, maintenance_calibration are arrays of strings.
+5. key_specs is an array of objects with keys: name, value, unit, conditions, evidence_chunk_ids (array of strings).
+6. constraints and differentiators are arrays of objects with keys: statement, evidence_chunk_ids (array of strings).
+7. Every evidence_chunk_ids must be an array of strings (chunk IDs from the evidence).
+
+Invalid JSON:
+{{ invalid_json }}
+
+Respond with only the corrected JSON object, no other text.
