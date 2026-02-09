@@ -198,9 +198,11 @@ Response includes preflight status, generated file paths, and any assumptions ma
    PDA_EMBEDDING_MODEL=openai
    PDA_DATA_DIR=/data
    CORS_ORIGINS=https://your-app.vercel.app
+   # Or use regex to allow all Vercel URLs (production + previews):
+   CORS_ORIGIN_REGEX=https://.*\.vercel\.app
    ```
 
-   > Render automatically injects `PORT`; the Dockerfile picks it up.
+   > Render automatically injects `PORT`; the Dockerfile picks it up. If you use `CORS_ORIGIN_REGEX`, you can omit explicit Vercel URLs from `CORS_ORIGINS`.
 
 6. Deploy. The health check is at `/health`.
 
@@ -237,6 +239,7 @@ Response includes preflight status, generated file paths, and any assumptions ma
 | `PDA_DATA_DIR` | Backend | `./data` | Data root. Set to `/data` on Render |
 | `PORT` | Backend | `8000` | Server port (Render injects this) |
 | `CORS_ORIGINS` | Backend | `http://localhost:3000,...` | Comma-separated allowed origins |
+| `CORS_ORIGIN_REGEX` | Backend | — | Regex for origins (e.g. `https://.*\.vercel\.app`) |
 | `MAX_UPLOAD_BYTES` | Backend | `52428800` | Max PDF upload size (50 MB) |
 | `NEXT_PUBLIC_API_BASE_URL` | Frontend | `http://localhost:8000` | Backend URL visible to browser |
 
@@ -247,7 +250,7 @@ Response includes preflight status, generated file paths, and any assumptions ma
 - **Data persistence:** All project data, ChromaDB indexes, and uploads live under `PDA_DATA_DIR`. On Render this is a persistent disk mounted at `/data` so data survives re-deploys.
 - **Rate limiting:** A simple in-memory sliding-window limiter (30 req/60 s per IP for mutating endpoints) protects the API.
 - **File upload limit:** Defaults to 50 MB; configurable via `MAX_UPLOAD_BYTES`.
-- **CORS:** Locked down to the origins listed in `CORS_ORIGINS`. Add your Vercel URL there.
+- **CORS:** Locked down to `CORS_ORIGINS`. Set `CORS_ORIGIN_REGEX=https://.*\.vercel\.app` to allow all Vercel deployments.
 - **Secrets:** `OPENAI_API_KEY` is only used server-side. The frontend never sees it.
 - **Traceability:** Every generated section includes citations to source chunks (chunk_id + location metadata).
 

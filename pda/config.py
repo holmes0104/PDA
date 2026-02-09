@@ -46,6 +46,8 @@ class Settings(BaseSettings):
 
     # CORS origins (comma-separated). Defaults to localhost dev.
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Optional regex to allow origins (e.g. https://.*\.vercel\.app for all Vercel deploys)
+    cors_origin_regex: str | None = None
 
     # Server port (Render injects PORT)
     port: int = 8000

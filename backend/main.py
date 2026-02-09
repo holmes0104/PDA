@@ -109,7 +109,10 @@ async def rate_limit_middleware(request: Request, call_next):
 # are present on ALL responses (including 401/429 error responses).
 # ---------------------------------------------------------------------------
 cors_origins = settings.cors_origin_list
+cors_origin_regex = settings.cors_origin_regex
 logger.info("CORS configured for origins: %s", cors_origins)
+if cors_origin_regex:
+    logger.info("CORS origin regex: %s", cors_origin_regex)
 
 # Log vector-store backend so operators can verify the deployment config.
 _vb = settings.pda_vector_backend
@@ -127,14 +130,16 @@ elif _vb == "chroma":
     )
 else:
     logger.warning("Vector store: unknown backend '%s' — defaulting to chroma.", _vb)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+cors_kw: dict = {
+    "allow_origins": cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+    "expose_headers": ["*"],
+}
+if cors_origin_regex:
+    cors_kw["allow_origin_regex"] = cors_origin_regex
+app.add_middleware(CORSMiddleware, **cors_kw)
 
 
 # ---------------------------------------------------------------------------
