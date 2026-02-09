@@ -110,6 +110,23 @@ async def rate_limit_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 cors_origins = settings.cors_origin_list
 logger.info("CORS configured for origins: %s", cors_origins)
+
+# Log vector-store backend so operators can verify the deployment config.
+_vb = settings.pda_vector_backend
+if _vb == "pgvector":
+    logger.info(
+        "Vector store: pgvector (Postgres) — stateless-safe. "
+        "DATABASE_URL %s",
+        "configured" if settings.pda_database_url else "*** NOT SET — will fail at query time ***",
+    )
+elif _vb == "chroma":
+    logger.info(
+        "Vector store: ChromaDB on-disk (persist_dir=%s). "
+        "Requires persistent disk on the backend host.",
+        settings.chroma_dir,
+    )
+else:
+    logger.warning("Vector store: unknown backend '%s' — defaulting to chroma.", _vb)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -147,13 +164,15 @@ async def root():
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
-from backend.routes import audit, auth, content_pack, downloads, factsheet, ingest, simulate, verify  # noqa: E402
+from backend.routes import audit, auth, content_pack, downloads, factsheet, ingest, pipeline, simulate, verify, web_content  # noqa: E402
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(ingest.router, prefix="/api", tags=["ingest"])
+app.include_router(pipeline.router, prefix="/api", tags=["pipeline"])
 app.include_router(factsheet.router, prefix="/api", tags=["factsheet"])
 app.include_router(content_pack.router, prefix="/api", tags=["content_pack"])
 app.include_router(audit.router, prefix="/api", tags=["audit"])
 app.include_router(simulate.router, prefix="/api", tags=["simulate"])
 app.include_router(verify.router, prefix="/api", tags=["verify"])
 app.include_router(downloads.router, prefix="/api", tags=["downloads"])
+app.include_router(web_content.router, prefix="/api", tags=["web_content"])

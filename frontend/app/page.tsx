@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import axios, { AxiosInstance } from 'axios'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
@@ -24,6 +25,23 @@ interface AuditResult {
   verifier_report_path: string
 }
 type Step = 'idle' | 'uploading' | 'factsheet' | 'auditing' | 'done'
+type ContentTab = 'audit' | 'drafts'
+type ContentJobStatus = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed'
+
+interface ContentDrafts {
+  landing_page: {
+    problem_statement: string
+    solution_overview: string
+    benefits: { headline: string; description: string; is_factual: boolean }[]
+    how_it_works: string
+    specs_explained: { spec_name: string; spec_value: string; unit: string; plain_language: string }[]
+    call_to_action: string
+  }
+  faq: { question: string; answer: string; is_factual: boolean }[]
+  use_case_pages: { title: string; slug: string; is_suggested: boolean; problem_context: string; solution_fit: string; benefits: string[]; implementation_notes: string }[]
+  comparisons: { title: string; best_for: string[]; not_ideal_for: string[]; dimensions: { dimension: string; this_product: string; generic_alternative: string }[] }[]
+  seo: { title_tag: string; meta_description: string; headings: { tag: string; text: string }[]; product_jsonld: Record<string, unknown> }
+}
 
 interface AuthSession {
   token: string
@@ -129,9 +147,96 @@ function LoginScreen({ onLogin }: { onLogin: (s: AuthSession) => void }) {
 }
 
 /* ================================================================== */
-/*  Main App (post-login)                                              */
+/*  Minimal Landing (post-login home)                                  */
 /* ================================================================== */
-function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: () => void }) {
+function MinimalLanding({
+  session,
+  onLogout,
+  onShowAudit,
+}: {
+  session: AuthSession
+  onLogout: () => void
+  onShowAudit: () => void
+}) {
+  return (
+    <main className="page">
+      <header className="header">
+        <div className="header-top-bar">
+          <span className="header-user">
+            Signed in as <strong>{session.display_name}</strong>
+          </span>
+          <button onClick={onLogout} className="btn btn-ghost btn-sm">Sign Out</button>
+        </div>
+        <h1>PDA</h1>
+        <p className="subtitle">LLM-Ready Product Content Generator</p>
+        <p className="tagline">
+          Upload a product PDF brochure and generate LLM-ready content packs — structured
+          fact sheet, canonical answers, FAQ, selection guidance, and use-case pages.
+        </p>
+        <div style={{ marginTop: '1rem' }}>
+          <Link href="/content-pack" className="btn btn-green btn-lg">
+            Content Pack Generator
+          </Link>
+        </div>
+        <p className="header-vaisala" style={{ marginTop: '1.5rem' }}>
+          <button
+            type="button"
+            onClick={onShowAudit}
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: '0.875rem', color: 'var(--muted)', padding: '0.25rem 0.5rem' }}
+          >
+            Legacy audit pipeline
+          </button>
+        </p>
+        <p className="header-vaisala">Designed for <strong>Vaisala</strong> by Thanh Nguyen (Holmes)</p>
+      </header>
+      <footer className="footer">
+        PDA &middot; Designed for Vaisala by Thanh Nguyen (Holmes) &middot; API&nbsp;
+        <a href={`${API_BASE}/api/docs`} target="_blank" rel="noopener noreferrer">docs</a>
+      </footer>
+    </main>
+  )
+}
+
+/* ================================================================== */
+/*  FAQ Accordion                                                       */
+/* ================================================================== */
+function FAQAccordion({ items }: { items: { question: string; answer: string; is_factual?: boolean }[] }) {
+  const [open, setOpen] = useState<number | null>(null)
+  return (
+    <div style={{ marginTop: '0.5rem' }}>
+      {items.map((item, i) => (
+        <div key={i} style={{ border: '1px solid var(--border-light)', borderRadius: 6, marginBottom: '0.5rem', overflow: 'hidden' }}>
+          <button
+            type="button"
+            onClick={() => setOpen(open === i ? null : i)}
+            style={{ width: '100%', padding: '0.6rem 0.75rem', textAlign: 'left', background: open === i ? 'var(--thunder-blue-light)' : 'transparent', border: 'none', cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}
+          >
+            {open === i ? '▾' : '▸'} {item.question}
+          </button>
+          {open === i && (
+            <div style={{ padding: '0.6rem 0.75rem', borderTop: '1px solid var(--border-light)', fontSize: '0.9rem', color: 'var(--muted)' }}>
+              {item.answer}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ================================================================== */
+/*  Main App (post-login) — full audit pipeline                        */
+/* ================================================================== */
+function AppDashboard({
+  session,
+  onLogout,
+  onBackToHome,
+}: {
+  session: AuthSession
+  onLogout: () => void
+  onBackToHome?: () => void
+}) {
   const [file, setFile] = useState<File | null>(null)
   const [productUrl, setProductUrl] = useState('')
   const [projectId, setProjectId] = useState<string | null>(null)
@@ -146,6 +251,13 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
   const [factsheet, setFactsheet] = useState<FactsheetResult | null>(null)
   const [audit, setAudit] = useState<AuditResult | null>(null)
   const [pdfGenerating, setPdfGenerating] = useState(false)
+
+  const [contentTab, setContentTab] = useState<ContentTab>('audit')
+  const [contentDrafts, setContentDrafts] = useState<ContentDrafts | null>(null)
+  const [contentJobId, setContentJobId] = useState<string | null>(null)
+  const [contentStatus, setContentStatus] = useState<ContentJobStatus>('idle')
+  const [contentProgress, setContentProgress] = useState(0)
+  const [contentError, setContentError] = useState('')
 
   /* ── Authenticated axios instance ─────────────────────────────── */
   const apiRef = useRef<AxiosInstance | null>(null)
@@ -172,6 +284,7 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
     setFile(null); setProductUrl(''); setProjectId(null)
     setStep('idle'); setProgress(0); setStatusMsg(''); setError('')
     setIngest(null); setFactsheet(null); setAudit(null)
+    setContentDrafts(null); setContentJobId(null); setContentStatus('idle'); setContentError(''); setContentTab('audit')
   }
 
   const downloadFile = useCallback((fileType: string) => {
@@ -218,6 +331,100 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
       setError(err?.response?.data?.detail || 'PDF generation failed')
     } finally {
       setPdfGenerating(false)
+    }
+  }, [projectId, api])
+
+  /* ---- Content generation (async) --------------------------------- */
+  const handleGenerateContent = useCallback(async () => {
+    if (!projectId) return
+    setContentError('')
+    setContentStatus('queued')
+    try {
+      const res = await api.post(`/api/products/${projectId}/generate-content`, {
+        tone: 'neutral',
+        length: 'medium',
+        audience: 'ops_manager',
+      })
+      if (res.data.drafts) {
+        setContentDrafts(res.data.drafts)
+        setContentStatus('succeeded')
+        setContentTab('drafts')
+      } else {
+        setContentJobId(res.data.job_id)
+        setContentStatus(res.data.status === 'running' ? 'running' : 'queued')
+      }
+    } catch (err: any) {
+      setContentError(err?.response?.data?.detail || 'Failed to start generation')
+      setContentStatus('failed')
+    }
+  }, [projectId, api])
+
+  useEffect(() => {
+    if (!contentJobId || !(contentStatus === 'queued' || contentStatus === 'running')) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get(`/api/generation-jobs/${contentJobId}`)
+        const st = res.data.status
+        setContentProgress(res.data.progress || 0)
+        if (st === 'succeeded' && res.data.drafts) {
+          setContentDrafts(res.data.drafts)
+          setContentStatus('succeeded')
+          setContentError('')
+          setContentTab('drafts')
+        } else if (st === 'failed') {
+          setContentStatus('failed')
+          setContentError(res.data.error_message || 'Generation failed')
+        } else {
+          setContentStatus(st === 'running' ? 'running' : 'queued')
+        }
+      } catch { /* keep polling */ }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [contentJobId, contentStatus, api])
+
+  const loadExistingDrafts = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const res = await api.get(`/api/products/${projectId}/content-drafts`)
+      setContentDrafts(res.data)
+      setContentStatus('succeeded')
+    } catch {
+      /* no drafts yet */
+    }
+  }, [projectId, api])
+
+  useEffect(() => {
+    if (projectId && !contentDrafts && contentStatus === 'idle') loadExistingDrafts()
+  }, [projectId, loadExistingDrafts, contentDrafts, contentStatus])
+
+  const downloadContentJson = useCallback(async () => {
+    if (!projectId || !contentDrafts) return
+    const blob = new Blob([JSON.stringify({ drafts: contentDrafts }, null, 2)], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `content-${projectId}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  }, [projectId, contentDrafts])
+
+  const downloadContentZip = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const res = await api.get(`/api/products/${projectId}/exports/content`, { params: { format: 'zip' }, responseType: 'blob' })
+      const blob = new Blob([res.data], { type: 'application/zip' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `content-${projectId}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setContentError(err?.response?.data?.detail || 'Download failed')
     }
   }, [projectId, api])
 
@@ -349,6 +556,11 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
           <span className="header-user">
             Signed in as <strong>{session.display_name}</strong>
           </span>
+          {onBackToHome && (
+            <button onClick={onBackToHome} className="btn btn-ghost btn-sm" style={{ marginRight: '0.5rem' }}>
+              ← Back to home
+            </button>
+          )}
           <button onClick={onLogout} className="btn btn-ghost btn-sm">Sign Out</button>
         </div>
         <h1>PDA</h1>
@@ -358,9 +570,9 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
           fact sheet, canonical answers, FAQ, selection guidance, and use-case pages.
         </p>
         <div style={{ marginTop: '0.75rem' }}>
-          <a href="/content-pack" className="btn btn-green btn-sm">
+          <Link href="/content-pack" className="btn btn-green btn-sm">
             Content Pack Generator
-          </a>
+          </Link>
         </div>
         <p className="header-vaisala">Designed for <strong>Vaisala</strong> by Thanh Nguyen (Holmes)</p>
       </header>
@@ -478,7 +690,27 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
             >
               {audit ? 'Audit Complete' : step === 'auditing' ? 'Auditing...' : 'Run Audit'}
             </button>
+            <button
+              onClick={handleGenerateContent}
+              disabled={busy || contentStatus === 'queued' || contentStatus === 'running'}
+              className={`btn ${contentDrafts ? 'btn-done' : 'btn-teal'}`}
+            >
+              {contentStatus === 'queued' || contentStatus === 'running'
+                ? `Generating… ${contentProgress}%`
+                : contentDrafts
+                  ? 'Content ready'
+                  : 'Generate content'}
+            </button>
           </div>
+          {(contentStatus === 'queued' || contentStatus === 'running') && (
+            <div className="progress-wrapper" style={{ marginTop: '0.5rem' }}>
+              <div className="progress-bar" style={{ width: `${contentProgress}%` }} />
+              <span className="progress-label">{contentProgress}%</span>
+            </div>
+          )}
+          {contentError && (
+            <div className="alert alert-error" style={{ marginTop: '0.5rem' }}>{contentError}</div>
+          )}
         </section>
       )}
 
@@ -494,19 +726,161 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
         </section>
       )}
 
-      {/* ── Audit Downloads ────────────────────────────────────── */}
-      {audit && (
-        <section className="card card-amber">
-          <h2>Audit Reports</h2>
-          <div className="btn-row">
-            <button onClick={() => downloadFile('report_html')} className="btn btn-primary btn-lg">HTML Report</button>
-            <button onClick={handleDownloadPdf} disabled={pdfGenerating} className="btn btn-red btn-lg">
-              {pdfGenerating ? 'Generating PDF...' : 'PDF Report'}
-            </button>
-            <button onClick={() => downloadFile('report_md')} className="btn btn-secondary">Markdown Report</button>
-            <button onClick={() => downloadFile('audit_json')} className="btn btn-teal">Audit Data (JSON)</button>
-            <button onClick={() => downloadFile('verifier_report')} className="btn btn-amber">Verifier Report</button>
-          </div>
+      {/* ── Audit Reports & Content Drafts (tabs) ───────────────── */}
+      {(audit || contentDrafts) && (
+        <section className="card">
+          {(audit && contentDrafts) && (
+            <div className="btn-row" style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.5rem' }}>
+              <button
+                onClick={() => setContentTab('audit')}
+                className="btn btn-ghost btn-sm"
+                style={contentTab === 'audit' ? { background: 'var(--thunder-blue-light)', color: 'var(--thunder-blue)' } : {}}
+              >
+                Audit Reports
+              </button>
+              <button
+                onClick={() => setContentTab('drafts')}
+                className="btn btn-ghost btn-sm"
+                style={contentTab === 'drafts' ? { background: 'var(--misty-green-light)', color: 'var(--success-text)' } : {}}
+              >
+                Content Drafts
+              </button>
+            </div>
+          )}
+
+          {((audit && contentDrafts && contentTab === 'audit') || (audit && !contentDrafts)) && (
+            <>
+              <h2>Audit Reports</h2>
+              <div className="btn-row">
+                <button onClick={() => downloadFile('report_html')} className="btn btn-primary btn-lg">HTML Report</button>
+                <button onClick={handleDownloadPdf} disabled={pdfGenerating} className="btn btn-red btn-lg">
+                  {pdfGenerating ? 'Generating PDF...' : 'PDF Report'}
+                </button>
+                <button onClick={() => downloadFile('report_md')} className="btn btn-secondary">Markdown Report</button>
+                <button onClick={() => downloadFile('audit_json')} className="btn btn-teal">Audit Data (JSON)</button>
+                <button onClick={() => downloadFile('verifier_report')} className="btn btn-amber">Verifier Report</button>
+              </div>
+            </>
+          )}
+
+          {((contentDrafts && contentTab === 'drafts') || (contentDrafts && !audit)) && (
+            <>
+              <h2>Content Drafts</h2>
+              <div className="btn-row" style={{ marginBottom: '1rem' }}>
+                <button onClick={downloadContentJson} className="btn btn-secondary">Download JSON</button>
+                <button onClick={downloadContentZip} className="btn btn-teal">Download ZIP</button>
+              </div>
+
+              {/* Landing page */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3>Landing Page</h3>
+                {contentDrafts.landing_page.problem_statement && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <p style={{ fontWeight: 500, color: 'var(--thunder-blue)' }}>Problem</p>
+                    <p className="small-text" style={{ marginTop: '0.25rem' }}>{contentDrafts.landing_page.problem_statement}</p>
+                  </div>
+                )}
+                {contentDrafts.landing_page.solution_overview && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <p style={{ fontWeight: 500, color: 'var(--thunder-blue)' }}>Solution</p>
+                    <p className="small-text" style={{ marginTop: '0.25rem' }}>{contentDrafts.landing_page.solution_overview}</p>
+                  </div>
+                )}
+                {contentDrafts.landing_page.benefits?.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <p style={{ fontWeight: 500, color: 'var(--thunder-blue)' }}>Benefits</p>
+                    <ul style={{ marginTop: '0.25rem', paddingLeft: '1.25rem' }}>
+                      {contentDrafts.landing_page.benefits.map((b, i) => (
+                        <li key={i} style={{ marginBottom: '0.5rem' }}>
+                          <strong>{b.headline}</strong> — {b.description}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {contentDrafts.landing_page.how_it_works && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <p style={{ fontWeight: 500, color: 'var(--thunder-blue)' }}>How It Works</p>
+                    <p className="small-text" style={{ marginTop: '0.25rem' }}>{contentDrafts.landing_page.how_it_works}</p>
+                  </div>
+                )}
+                {contentDrafts.landing_page.specs_explained?.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <p style={{ fontWeight: 500, color: 'var(--thunder-blue)' }}>Specs</p>
+                    <ul style={{ marginTop: '0.25rem', paddingLeft: '1.25rem' }}>
+                      {contentDrafts.landing_page.specs_explained.map((s, i) => (
+                        <li key={i} style={{ marginBottom: '0.5rem' }}>
+                          <strong>{s.spec_name}:</strong> {s.spec_value} {s.unit} — {s.plain_language}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* FAQ accordion */}
+              {contentDrafts.faq?.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h3>FAQ</h3>
+                  <FAQAccordion items={contentDrafts.faq} />
+                </div>
+              )}
+
+              {/* Use case pages */}
+              {contentDrafts.use_case_pages?.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h3>Use Case Pages</h3>
+                  <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
+                    {contentDrafts.use_case_pages.map((u, i) => (
+                      <li key={i} style={{ marginBottom: '0.5rem', padding: '0.5rem', background: 'var(--thunder-blue-light)', borderRadius: 6 }}>
+                        <span style={{ fontWeight: 500 }}>{u.is_suggested ? '[Suggested] ' : ''}{u.title}</span>
+                        {u.problem_context && <p className="small-text" style={{ marginTop: '0.25rem', marginBottom: 0 }}>{u.problem_context.slice(0, 120)}…</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Comparisons */}
+              {contentDrafts.comparisons?.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h3>Comparisons</h3>
+                  <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
+                    {contentDrafts.comparisons.map((c, i) => (
+                      <li key={i} style={{ marginBottom: '0.5rem', padding: '0.5rem', background: 'var(--thunder-blue-light)', borderRadius: 6 }}>
+                        <span style={{ fontWeight: 500 }}>{c.title}</span>
+                        {c.best_for?.length > 0 && <p className="small-text" style={{ marginTop: '0.25rem', marginBottom: 0 }}>Best for: {c.best_for.slice(0, 2).join('; ')}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* SEO preview */}
+              {contentDrafts.seo && (
+                <div style={{ marginBottom: 0 }}>
+                  <h3>SEO Preview</h3>
+                  <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg)', borderRadius: 6, fontSize: '0.85rem' }}>
+                    {contentDrafts.seo.title_tag && (
+                      <p style={{ color: 'var(--thunder-blue)', fontWeight: 500, marginBottom: '0.25rem' }}>{contentDrafts.seo.title_tag}</p>
+                    )}
+                    {contentDrafts.seo.meta_description && (
+                      <p style={{ color: 'var(--muted)', marginBottom: 0 }}>{contentDrafts.seo.meta_description}</p>
+                    )}
+                    {contentDrafts.seo.headings?.length > 0 && (
+                      <p className="small-text" style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+                        H1/H2: {contentDrafts.seo.headings.map(h => h.text).join(' → ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {contentTab === 'drafts' && !contentDrafts && (
+            <p className="small-text">No content drafts yet. Click &quot;Generate content&quot; above.</p>
+          )}
         </section>
       )}
 
@@ -525,6 +899,7 @@ function AppDashboard({ session, onLogout }: { session: AuthSession; onLogout: (
 export default function Home() {
   const [session, setSession] = useState<AuthSession | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [showAuditPipeline, setShowAuditPipeline] = useState(false)
 
   // Wait for client-side mount before rendering to avoid hydration
   // mismatches caused by browser extensions (e.g. password managers
@@ -571,5 +946,21 @@ export default function Home() {
     return <LoginScreen onLogin={setSession} />
   }
 
-  return <AppDashboard session={session} onLogout={handleLogout} />
+  // Show minimal landing by default; "Legacy audit pipeline" reveals full audit UI
+  if (!showAuditPipeline) {
+    return (
+      <MinimalLanding
+        session={session}
+        onLogout={handleLogout}
+        onShowAudit={() => setShowAuditPipeline(true)}
+      />
+    )
+  }
+  return (
+    <AppDashboard
+      session={session}
+      onLogout={handleLogout}
+      onBackToHome={() => setShowAuditPipeline(false)}
+    />
+  )
 }

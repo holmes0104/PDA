@@ -83,7 +83,12 @@ async def download_file(project_id: str, file_type: str):
         "content_pack_manifest": "manifest.json",
     }
 
-    valid_types = set(file_map.keys()) | set(content_pack_files.keys()) | set(llm_content_pack_files.keys()) | {"verifier_report"}
+    # Web content drafts (in web_content/ directory)
+    web_content_files = {
+        "web_content_drafts": "web_content_drafts.json",
+    }
+
+    valid_types = set(file_map.keys()) | set(content_pack_files.keys()) | set(llm_content_pack_files.keys()) | set(web_content_files.keys()) | {"verifier_report"}
     if file_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Unknown file type: {file_type}")
 
@@ -101,6 +106,9 @@ async def download_file(project_id: str, file_type: str):
     elif file_type in llm_content_pack_files:
         filename = llm_content_pack_files[file_type]
         file_path = project_dir / "content_pack" / filename
+    elif file_type in web_content_files:
+        filename = web_content_files[file_type]
+        file_path = project_dir / "web_content" / filename
     elif file_type.startswith("usecase_"):
         # Dynamic use-case page files: usecase_uc-1, usecase_uc-2, etc.
         file_path = project_dir / "content_pack" / f"{file_type}.md"

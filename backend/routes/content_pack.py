@@ -25,7 +25,7 @@ from pda.ingest.pdf_parser import PDFParseError, parse_pdf
 from pda.llm import get_provider
 from pda.schemas.llm_ready_pack import MissingFactQuestion
 from pda.schemas.models import ChunkSource
-from pda.store.vectorstore import VectorStore
+from pda.store import VectorStoreBackend, get_vector_store
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -90,15 +90,30 @@ def _resolve_llm(llm_provider: Optional[str], llm_model: Optional[str]):
     return get_provider(provider_name, api_key=api_key, model=model)
 
 
-def _get_or_build_store(project_id: str, project_dir: Path) -> VectorStore:
-    """Return a VectorStore populated with the project's chunks."""
-    chroma_dir = settings.chroma_dir / project_id
-    chroma_dir.mkdir(parents=True, exist_ok=True)
-    store = VectorStore(
+def _get_or_build_store(project_id: str, project_dir: Path) -> VectorStoreBackend:
+    """Return a vector store populated with the project's chunks.
+
+    Respects ``PDA_VECTOR_BACKEND``:
+    * ``chroma``   — on-disk ChromaDB (needs persistent disk, e.g. Render).
+    * ``pgvector`` — Postgres + pgvector (stateless-safe, needs DATABASE_URL).
+    """
+    backend = settings.pda_vector_backend
+
+    persist_dir: str | None = None
+    if backend == "chroma":
+        chroma_dir = settings.chroma_dir / project_id
+        chroma_dir.mkdir(parents=True, exist_ok=True)
+        persist_dir = str(chroma_dir)
+
+    logger.debug("Initialising vector store (backend=%s, project=%s)", backend, project_id)
+    store = get_vector_store(
+        backend=backend,
         collection_name="pda_factsheet",
-        persist_directory=str(chroma_dir),
+        persist_directory=persist_dir,
         embedding_model=settings.pda_embedding_model,
         openai_api_key=settings.openai_api_key,
+        database_url=settings.pda_database_url,
+        project_id=project_id,
     )
 
     # If collection is already populated (from a prior factsheet run), skip re-indexing

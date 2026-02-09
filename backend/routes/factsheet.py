@@ -21,7 +21,7 @@ from pda.ingest.pdf_parser import PDFParseError, parse_pdf
 from pda.ingest.chunker import chunk_document
 from pda.llm import get_provider
 from pda.schemas.models import ChunkSource
-from pda.store.vectorstore import VectorStore
+from pda.store import get_vector_store
 from pda.verifier import run_verifier_factsheet, write_verifier_report
 
 logger = logging.getLogger(__name__)
@@ -94,16 +94,27 @@ async def extract_factsheet(request: FactsheetRequest):
     with open(cls_path, "w", encoding="utf-8") as _f:
         _json.dump(classification.model_dump(), _f, indent=2, ensure_ascii=False)
 
-    # Vector store
-    chroma_dir = settings.chroma_dir / request.project_id
-    chroma_dir.mkdir(parents=True, exist_ok=True)
-    store = VectorStore(
+    # Vector store — respects PDA_VECTOR_BACKEND (chroma | pgvector)
+    backend = settings.pda_vector_backend
+    persist_dir: str | None = None
+    if backend == "chroma":
+        chroma_dir = settings.chroma_dir / request.project_id
+        chroma_dir.mkdir(parents=True, exist_ok=True)
+        persist_dir = str(chroma_dir)
+
+    logger.info(
+        "Initialising vector store (backend=%s, project=%s) — indexing %d chunks",
+        backend, request.project_id, len(chunks),
+    )
+    store = get_vector_store(
+        backend=backend,
         collection_name="pda_factsheet",
-        persist_directory=str(chroma_dir),
+        persist_directory=persist_dir,
         embedding_model=settings.pda_embedding_model,
         openai_api_key=settings.openai_api_key,
+        database_url=settings.pda_database_url,
+        project_id=request.project_id,
     )
-    logger.info("Indexing %d chunks", len(chunks))
     store.add_chunks(chunks)
 
     # Extract fact sheet — use request-level LLM overrides if provided

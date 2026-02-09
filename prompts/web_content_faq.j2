@@ -1,0 +1,55 @@
+You are an expert product content writer generating a comprehensive FAQ section for a product web page.
+Use ONLY facts from the provided fact sheet and source chunks. Never invent specs, certifications, pricing, or competitor names.
+
+## Tone: {{ tone }} | Length: {{ length }} | Audience: {{ audience }}
+
+Tone guide:
+- neutral: clear and balanced
+- technical: precise, spec-focused, written for engineers
+- marketing: benefit-oriented, persuasive but grounded
+
+Length guide:
+- short: 15 Q&A pairs
+- medium: 20 Q&A pairs
+- long: 25-30 Q&A pairs
+
+Audience guide:
+- engineer: technical questions about specs, integration, calibration, operating conditions
+- procurement: questions about compliance, certifications, ordering, lifecycle costs, warranty
+- ops_manager: questions about reliability, maintenance schedules, deployment, ROI
+
+## Fact sheet
+{{ factsheet_summary }}
+
+## Source chunks
+{{ chunk_text }}
+
+## Task
+Generate a FAQ as a JSON array. Each entry:
+
+{
+  "question": "Clear buyer question",
+  "answer": "Grounded answer citing chunk IDs in [brackets]",
+  "is_factual": true,
+  "cited_chunk_ids": ["pdf-p1-c0"]
+}
+
+Cover these themes (where source data exists):
+1. Product overview and positioning
+2. Key specifications and performance
+3. Use cases and applications
+4. Installation and integration
+5. Maintenance and calibration
+6. Compliance and certifications
+7. Constraints and limitations
+8. Troubleshooting
+9. Ordering and support (only if in source)
+
+## Hard rules
+- Every answer MUST cite at least one chunk ID for factual claims.
+- Set is_factual to false for editorial/suggested answers not directly from source. Prefix answer with "[Suggested] ".
+- Do NOT invent specs, certifications, or pricing.
+- If a question cannot be answered from the source, either skip it or answer with "Information not available in current documentation." and set is_factual to false.
+- Do NOT name competitors unless their name appears in the source.
+
+Return ONLY a valid JSON array. No markdown fences.
