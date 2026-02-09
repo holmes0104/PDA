@@ -7,6 +7,38 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+# ---------------------------------------------------------------------------
+# Document classification
+# ---------------------------------------------------------------------------
+
+class DocumentType(str, Enum):
+    """Classification of the input document's purpose / genre."""
+    PRODUCT_MARKETING = "product_marketing"
+    TECHNICAL_MANUAL = "technical_manual"
+    INSTALLATION_CALIBRATION = "installation_calibration"
+    MIXED = "mixed"
+
+
+class DocumentClassification(BaseModel):
+    """Result of the pre-extraction document classification step."""
+    document_type: DocumentType = DocumentType.MIXED
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    signals: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Raw signal scores that drove the classification (for transparency / debugging).",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Chunk-level models
+# ---------------------------------------------------------------------------
+
+class ContentRole(str, Enum):
+    """Whether a chunk carries buyer-relevant information or operational noise."""
+    BUYER = "buyer"
+    OPERATIONAL = "operational"
+
+
 class ChunkSource(str, Enum):
     PDF = "pdf"
     URL = "url"
@@ -25,6 +57,7 @@ class DocumentChunk(BaseModel):
     char_offset_start: int = 0
     char_offset_end: int = 0
     token_count: int = 0
+    content_role: ContentRole = ContentRole.BUYER  # default: assume buyer-relevant
     metadata: dict[str, Any] = {}  # extensible (table flag, image_ref, etc.)
 
 

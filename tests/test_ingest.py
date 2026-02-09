@@ -106,7 +106,7 @@ def test_ingest_end_to_end(sample_pdf_path):
     """Ingestion runs end-to-end and produces chunks.jsonl and raw_extraction/."""
     with tempfile.TemporaryDirectory() as tmp:
         out_dir = Path(tmp)
-        chunks = run_ingestion(pdf_path=sample_pdf_path, url=None, out_dir=out_dir)
+        chunks, _classification = run_ingestion(pdf_path=sample_pdf_path, url=None, out_dir=out_dir)
 
         assert (out_dir / "chunks.jsonl").exists()
         assert (out_dir / "raw_extraction" / "pdf_pages.json").exists()

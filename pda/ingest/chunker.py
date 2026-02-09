@@ -1,7 +1,22 @@
 """Text chunking into DocumentChunks with recursive character splitter and section heading detection."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from pda.ingest.table_normalizer import (
+    TableSpec,
+    extract_spec_rows,
+    normalize_table,
+    table_to_text_summary,
+)
+from pda.schemas.ingestion_chunks import (
+    ChunkType,
+    NormalizedChunk,
+    SourceInfo,
+)
 from pda.schemas.models import ChunkSource, DocumentChunk, IngestionChunk
 
 # Defaults: ~500 chars ~= ~125 tokens; overlap for context
@@ -179,6 +194,109 @@ def document_chunks_to_ingestion(
                 heading_path=ch.heading_path,
                 section_title=ch.section_heading or None,
                 text=ch.text,
+            )
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Table-aware chunking helpers
+# ---------------------------------------------------------------------------
+
+
+def chunk_pdf_tables(
+    tables_by_page: dict[int, list[list[list[Any]]]],
+    source_file: str,
+) -> list[NormalizedChunk]:
+    """
+    Turn raw tables (from ``parse_pdf_with_tables``) into ``NormalizedChunk``
+    objects with ``chunk_type == 'table'``.
+    """
+    chunks: list[NormalizedChunk] = []
+    for page_num, page_tables in sorted(tables_by_page.items()):
+        for t_idx, raw_table in enumerate(page_tables):
+            table_spec = normalize_table(raw_table)
+            if not table_spec.rows:
+                continue
+            spec_rows = extract_spec_rows(table_spec) if table_spec.kind == "spec" else None
+            summary = table_to_text_summary(table_spec)
+            chunk_id = f"pdf-p{page_num}-t{t_idx}"
+            chunks.append(
+                NormalizedChunk(
+                    chunk_id=chunk_id,
+                    chunk_type=ChunkType.TABLE,
+                    source=SourceInfo(
+                        source_type="pdf",
+                        source_ref=source_file,
+                        page_num=page_num,
+                    ),
+                    content=summary,
+                    table=table_spec,
+                    spec_rows=spec_rows if spec_rows else None,
+                    token_count=_approx_tokens(summary),
+                )
+            )
+    return chunks
+
+
+def chunk_url_tables(
+    url_tables: list,  # list of URLTable
+    source_ref: str,
+) -> list[NormalizedChunk]:
+    """
+    Turn ``URLTable`` objects into ``NormalizedChunk`` with ``chunk_type == 'table'``.
+    """
+    chunks: list[NormalizedChunk] = []
+    for t_idx, ut in enumerate(url_tables):
+        table_spec = normalize_table(ut.rows, caption=ut.caption)
+        if not table_spec.rows:
+            continue
+        spec_rows = extract_spec_rows(table_spec) if table_spec.kind == "spec" else None
+        summary = table_to_text_summary(table_spec)
+        chunk_id = f"url-t{t_idx}"
+        chunks.append(
+            NormalizedChunk(
+                chunk_id=chunk_id,
+                chunk_type=ChunkType.TABLE,
+                source=SourceInfo(
+                    source_type="url",
+                    source_ref=source_ref,
+                    heading_path=ut.heading_path or None,
+                ),
+                content=summary,
+                table=table_spec,
+                spec_rows=spec_rows if spec_rows else None,
+                token_count=_approx_tokens(summary),
+            )
+        )
+    return chunks
+
+
+def document_chunks_to_normalized(
+    chunks: list[DocumentChunk],
+) -> list[NormalizedChunk]:
+    """Convert ``DocumentChunk`` list to ``NormalizedChunk`` (text type)."""
+    result: list[NormalizedChunk] = []
+    for ch in chunks:
+        if not ch.text.strip():
+            continue
+        result.append(
+            NormalizedChunk(
+                chunk_id=ch.chunk_id,
+                chunk_type=ChunkType.TEXT,
+                source=SourceInfo(
+                    source_type=ch.source_type.value,
+                    source_ref=ch.source_file,
+                    page_num=ch.page_number,
+                    heading_path=ch.heading_path,
+                    section_title=ch.section_heading,
+                ),
+                content=ch.text,
+                char_offset_start=ch.char_offset_start,
+                char_offset_end=ch.char_offset_end,
+                token_count=ch.token_count,
+                content_role=ch.content_role.value,
+                metadata=ch.metadata,
             )
         )
     return result

@@ -1,0 +1,19 @@
+You are an expert product content auditor. Evaluate the following product content for **Selection Guidance** — does the content help a buyer choose the right product variant, configuration, or model for their application?
+
+## Source content (chunks)
+{{ chunk_text }}
+
+## Task
+Score 0-10 and return **only** a JSON object with these keys:
+- "score_0_10": integer 0-10 (10 = excellent selection guidance)
+- "rationale": string explaining the score
+- "recommendations": list of strings — actionable improvements
+- "evidence_chunk_ids": list of chunk IDs that informed your evaluation
+
+Criteria:
+- Does the content explain which variant/model suits which application?
+- Are selection criteria (temperature range, accuracy class, interface type, etc.) clearly listed?
+- Is there a selection table or decision tree?
+- Are compatibility requirements stated?
+
+Return ONLY valid JSON, no markdown fences.

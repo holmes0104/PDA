@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'PDA - Product Discoverability Auditor',
-  description: 'Audit PDF brochures and product pages for LLM-readiness',
+  title: 'PDA - LLM-Ready Product Content Generator | Vaisala',
+  description: 'Generate LLM-ready product content packs from PDF brochures and datasheets. Designed for Vaisala by Thanh Nguyen (Holmes).',
 }
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   )
 }

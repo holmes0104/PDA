@@ -1,37 +1,74 @@
 # LLM-readiness scoring rubric (weights sum to 1.0; each dimension scored 0-10)
 dimensions:
+  # ── Deterministic checks (existing) ────────────────────────────────────
   - id: completeness
     name: Completeness
-    weight: 0.20
+    weight: 0.10
     method: deterministic
   - id: structural_clarity
     name: Structural Clarity
-    weight: 0.15
+    weight: 0.08
     method: deterministic
   - id: spec_precision
     name: Specification Precision
-    weight: 0.15
+    weight: 0.08
     method: deterministic
   - id: schema_readiness
     name: Schema.org Readiness
-    weight: 0.10
+    weight: 0.04
     method: deterministic
-  - id: unique_differentiators
-    name: Unique Differentiators
-    weight: 0.10
-    method: llm_rubric
-  - id: buyer_answerability
-    name: Buyer-Question Answerability
-    weight: 0.15
-    method: llm_rubric
   - id: consistency
     name: Consistency
-    weight: 0.10
+    weight: 0.05
     method: deterministic
   - id: freshness
     name: Freshness Signals
+    weight: 0.03
+    method: deterministic
+
+  # ── New deterministic checks ───────────────────────────────────────────
+  - id: required_sections
+    name: Required Sections
+    weight: 0.08
+    method: deterministic
+  - id: acronym_list
+    name: Acronym / Abbreviation List
+    weight: 0.04
+    method: deterministic
+  - id: model_naming
+    name: Model Naming Consistency
     weight: 0.05
     method: deterministic
+  - id: unit_consistency
+    name: Unit Consistency
+    weight: 0.05
+    method: deterministic
+
+  # ── LLM-based checks ──────────────────────────────────────────────────
+  - id: unique_differentiators
+    name: Unique Differentiators
+    weight: 0.05
+    method: llm_rubric
+  - id: buyer_answerability
+    name: Buyer-Question Answerability
+    weight: 0.07
+    method: llm_rubric
+  - id: selection_guidance
+    name: Selection Guidance
+    weight: 0.07
+    method: llm_rubric
+  - id: use_case_coverage
+    name: Use-Case Coverage
+    weight: 0.07
+    method: llm_rubric
+  - id: comparability
+    name: Comparability
+    weight: 0.06
+    method: llm_rubric
+  - id: trust_citation_strength
+    name: Trust / Citation Strength
+    weight: 0.08
+    method: llm_rubric
 
 grade_thresholds:
   A: 85

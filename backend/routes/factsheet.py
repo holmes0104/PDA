@@ -3,10 +3,18 @@
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
+try:
+    from openai import APIError, APIStatusError, RateLimitError
+except ImportError:
+    APIError = type("APIError", (Exception,), {})
+    APIStatusError = type("APIStatusError", (Exception,), {})
+    RateLimitError = type("RateLimitError", (Exception,), {})
 from pydantic import BaseModel
 
+from pda.classify import classify_document, tag_chunks
 from pda.config import get_settings
 from pda.extract.factsheet_extractor import extract_product_fact_sheet
 from pda.ingest.pdf_parser import PDFParseError, parse_pdf
@@ -23,6 +31,8 @@ settings = get_settings()
 
 class FactsheetRequest(BaseModel):
     project_id: str
+    llm_provider: Optional[str] = None   # "openai" | "anthropic" — overrides server default
+    llm_model: Optional[str] = None      # e.g. "gpt-4o", "claude-3-5-sonnet-20241022"
 
 
 class FactsheetResponse(BaseModel):
@@ -30,6 +40,22 @@ class FactsheetResponse(BaseModel):
     factsheet_path: str
     provenance_path: str
     verifier_report_path: str
+
+
+def _resolve_llm(llm_provider: Optional[str], llm_model: Optional[str]):
+    """Build an LLM provider instance, honouring optional overrides from the request."""
+    provider_name = (llm_provider or settings.pda_llm_provider).lower()
+
+    # Resolve API key
+    if provider_name == "openai":
+        api_key = settings.openai_api_key
+        default_model = settings.pda_openai_model
+    else:
+        api_key = settings.anthropic_api_key
+        default_model = settings.pda_anthropic_model
+
+    model = llm_model or default_model
+    return get_provider(provider_name, api_key=api_key, model=model)
 
 
 @router.post("/factsheet", response_model=FactsheetResponse, status_code=status.HTTP_201_CREATED)
@@ -55,6 +81,19 @@ async def extract_factsheet(request: FactsheetRequest):
     if not chunks:
         raise HTTPException(status_code=400, detail="No chunks extracted from PDFs")
 
+    # --- Document classification & content-role tagging ---
+    classification = classify_document(chunks)
+    tag_chunks(chunks, classification)
+    logger.info(
+        "Document classified as %s (confidence=%.2f)",
+        classification.document_type.value,
+        classification.confidence,
+    )
+    import json as _json
+    cls_path = project_dir / "classification.json"
+    with open(cls_path, "w", encoding="utf-8") as _f:
+        _json.dump(classification.model_dump(), _f, indent=2, ensure_ascii=False)
+
     # Vector store
     chroma_dir = settings.chroma_dir / request.project_id
     chroma_dir.mkdir(parents=True, exist_ok=True)
@@ -67,24 +106,45 @@ async def extract_factsheet(request: FactsheetRequest):
     logger.info("Indexing %d chunks", len(chunks))
     store.add_chunks(chunks)
 
-    # Extract fact sheet
-    provider_name = settings.pda_llm_provider.lower()
-    llm = get_provider(
-        provider_name,
-        api_key=settings.openai_api_key if provider_name == "openai" else settings.anthropic_api_key,
-        model=settings.pda_openai_model if provider_name == "openai" else settings.pda_anthropic_model,
-    )
+    # Extract fact sheet — use request-level LLM overrides if provided
+    provider_name = (request.llm_provider or settings.pda_llm_provider).lower()
+    if provider_name == "openai":
+        api_key = settings.openai_api_key
+    else:
+        api_key = settings.anthropic_api_key
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"API key not configured for provider '{provider_name}'. Please set {'OPENAI_API_KEY' if provider_name == 'openai' else 'ANTHROPIC_API_KEY'} in .env",
+        )
+    
+    llm = _resolve_llm(request.llm_provider, request.llm_model)
 
-    logger.info("Extracting fact sheet")
+    logger.info(
+        "Extracting fact sheet (provider=%s, model=%s)",
+        request.llm_provider or settings.pda_llm_provider,
+        request.llm_model or "default",
+    )
     try:
         sheet, provenance = extract_product_fact_sheet(store, llm)
-    except Exception as e:
+    except (RateLimitError, APIStatusError) as e:
+        status_code = getattr(e, "status_code", None)
         err_msg = str(e)
-        if "insufficient_quota" in err_msg or "429" in err_msg:
+        if status_code == 402 or "insufficient_quota" in err_msg.lower() or "payment" in err_msg.lower() or "429" in err_msg:
+            logger.error("API quota/payment error: %s", err_msg)
             raise HTTPException(
                 status_code=402,
-                detail="OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/settings/organization/billing",
+                detail=f"API quota/payment issue: {err_msg[:200]}. Please check your billing for the selected provider.",
             )
+        logger.exception("API error during factsheet extraction")
+        raise HTTPException(status_code=500, detail=f"API error during factsheet extraction: {err_msg[:300]}")
+    except APIError as e:
+        err_msg = str(e)
+        logger.exception("OpenAI API error during factsheet extraction")
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {err_msg[:300]}")
+    except Exception as e:
+        err_msg = str(e)
         logger.exception("Factsheet extraction failed")
         raise HTTPException(status_code=500, detail=f"Factsheet extraction failed: {err_msg[:300]}")
 

@@ -1,0 +1,25 @@
+You are an expert product content auditor. Evaluate the following product content for **Buyer-Question Answerability** — could an LLM answer common buyer questions accurately using only this content?
+
+## Source content (chunks)
+{{ chunk_text }}
+
+## Task
+Score 0-10 and return **only** a JSON object with these keys:
+- "score_0_10": integer 0-10 (10 = answers all common buyer questions)
+- "rationale": string explaining the score
+- "recommendations": list of strings — actionable improvements
+- "evidence_chunk_ids": list of chunk IDs that informed your evaluation
+
+Consider these common buyer questions:
+1. What is this product and who is it for?
+2. What are the key specifications?
+3. How much does it cost / what are the purchasing options?
+4. What warranty/support is included?
+5. How does it compare to alternatives?
+6. What certifications does it have?
+7. What are the installation requirements?
+8. What maintenance is required?
+
+For each question that CANNOT be answered from the content, deduct points.
+
+Return ONLY valid JSON, no markdown fences.

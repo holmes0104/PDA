@@ -50,6 +50,7 @@ data/
 .coverage
 htmlcov/
 .tox/
+tests/fixtures/*.pdf
 
 # OS
 .DS_Store

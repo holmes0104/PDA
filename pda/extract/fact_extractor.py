@@ -7,6 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from pda.schemas.models import (
+    ContentRole,
     DocumentChunk,
     EvidenceRef,
     FactValue,
@@ -81,12 +82,21 @@ def extract_fact_sheet(
     """
     Run LLM extraction over chunks and return a grounded ProductFactSheet.
     llm_provider must have .complete(prompt: str) -> str.
+
+    Buyer-tagged chunks are prioritized in the context window; operational
+    chunks are appended only if space remains, so the LLM focuses on
+    buyer-relevant content.
     """
     chunk_by_id = _chunk_map(chunks)
-    # Truncate context if needed
+
+    # Prioritize buyer-tagged chunks, then fill with operational if space allows
+    buyer = [c for c in chunks if c.content_role == ContentRole.BUYER]
+    operational = [c for c in chunks if c.content_role == ContentRole.OPERATIONAL]
+    ordered = buyer + operational  # buyer first
+
     total = 0
     use: list[DocumentChunk] = []
-    for c in chunks:
+    for c in ordered:
         if total + len(c.text) > max_chars:
             break
         use.append(c)

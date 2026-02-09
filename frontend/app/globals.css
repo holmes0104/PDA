@@ -1,24 +1,42 @@
 /* ================================================================
-   PDA — Product Discoverability Auditor  ·  Global Styles
+   PDA — Product Discoverability Auditor  ·  Vaisala Brand Styles
+   Based on Vaisala Brand Book: https://brand.vaisala.com/
    ================================================================ */
 
 :root {
-  --bg: #f8f9fb;
+  /* Vaisala Official Colors */
+  --thunder-blue: #0A2A3D;        /* Primary brand color */
+  --thunder-blue-light: rgba(10, 42, 61, 0.08);
+  --ember-orange: #FB6432;        /* Accent/CTA */
+  --ember-orange-light: rgba(251, 100, 50, 0.1);
+  --misty-green: #91C1B9;         /* Success/secondary */
+  --misty-green-light: rgba(145, 193, 185, 0.15);
+  --fusion-yellow: #DBF93A;       /* Highlight/warning */
+  --fusion-yellow-light: rgba(219, 249, 58, 0.15);
+
+  /* UI Colors */
+  --bg: #f8f9fa;
   --surface: #ffffff;
-  --text: #1a1a2e;
-  --muted: #6b7280;
-  --border: #e2e5ea;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --green: #16a34a;
-  --green-light: #dcfce7;
-  --teal: #0891b2;
-  --amber: #d97706;
-  --amber-light: #fef3c7;
-  --red: #dc2626;
-  --red-light: #fee2e2;
-  --info: #dbeafe;
-  --radius: 10px;
+  --text: #0A2A3D;                /* Thunder Blue for text */
+  --muted: #5a6c7d;               /* Accessible gray on Thunder Blue */
+  --border: #d1d9e0;
+  --border-light: #e8ecef;
+
+  /* Semantic Colors (using Vaisala palette) */
+  --primary: var(--thunder-blue);
+  --primary-hover: #0d3a52;
+  --accent: var(--ember-orange);
+  --accent-hover: #e8551f;
+  --success: var(--misty-green);
+  --success-text: #2d5a52;
+  --warning: var(--fusion-yellow);
+  --warning-text: #5a6b1f;
+  --error: #d32f2f;
+  --error-light: rgba(211, 47, 47, 0.1);
+  --info: rgba(10, 42, 61, 0.08);
+  --info-text: #0A2A3D;
+
+  --radius: 8px;
 }
 
 *,
@@ -35,10 +53,15 @@ html {
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Vaisala Sans-inspired font stack (rounded, modern) */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 
+              'Arial', 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ── Page Layout ─────────────────────────────────────── */
@@ -56,9 +79,11 @@ body {
 
 .header h1 {
   font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--primary);
+  font-weight: 600;              /* No bold per Vaisala guidelines */
+  letter-spacing: -0.02em;
+  color: var(--thunder-blue);
+  /* Rounded joints effect - subtle */
+  text-rendering: optimizeLegibility;
 }
 
 .subtitle {
@@ -80,22 +105,25 @@ body {
 /* ── Cards ───────────────────────────────────────────── */
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius);
   padding: 1.5rem;
   margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(10, 42, 61, 0.05);
 }
 
 .card h2 {
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 600;              /* No bold per Vaisala guidelines */
   margin-bottom: 0.75rem;
+  color: var(--thunder-blue);
 }
 
 .card h3 {
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 500;              /* No bold per Vaisala guidelines */
   margin: 0.75rem 0 0.5rem;
+  color: var(--thunder-blue);
 }
 
 .card ol {
@@ -109,17 +137,17 @@ body {
 }
 
 .card-green {
-  background: var(--green-light);
-  border-color: #86efac;
+  background: var(--misty-green-light);
+  border-color: var(--misty-green);
 }
 
 .card-amber {
-  background: var(--amber-light);
-  border-color: #fcd34d;
+  background: var(--fusion-yellow-light);
+  border-color: var(--fusion-yellow);
 }
 
 .demo-card {
-  border-left: 4px solid var(--primary);
+  border-left: 4px solid var(--thunder-blue);
 }
 
 .demo-card p,
@@ -128,17 +156,20 @@ body {
 }
 
 .demo-card a {
-  color: var(--primary);
+  color: var(--thunder-blue);
   text-decoration: underline;
+}
+.demo-card a:hover {
+  color: var(--ember-orange);
 }
 
 /* ── Form Elements ───────────────────────────────────── */
 .label {
   display: block;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;              /* No bold per Vaisala guidelines */
   margin-bottom: 0.35rem;
-  color: var(--text);
+  color: var(--thunder-blue);
 }
 
 .file-input {
@@ -160,8 +191,43 @@ body {
 }
 
 .text-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: var(--thunder-blue);
+  box-shadow: 0 0 0 3px var(--thunder-blue-light);
+}
+
+.select-input {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8.825a.5.5 0 0 1-.354-.146L2.146 5.18a.5.5 0 1 1 .708-.708L6 7.618l3.146-3.146a.5.5 0 0 1 .708.708L6.354 8.68a.5.5 0 0 1-.354.146Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.select-input:focus {
+  border-color: var(--thunder-blue);
+  box-shadow: 0 0 0 3px var(--thunder-blue-light);
+}
+
+.select-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hint-text {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.3rem;
 }
 
 /* ── Buttons ─────────────────────────────────────────── */
@@ -169,11 +235,14 @@ body {
   display: inline-block;
   padding: 0.6rem 1.2rem;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;              /* No bold per Vaisala guidelines */
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.2s ease, opacity 0.15s, transform 0.1s ease;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .btn:disabled {
@@ -187,7 +256,7 @@ body {
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--thunder-blue);
   color: #fff;
 }
 .btn-primary:hover:not(:disabled) {
@@ -195,28 +264,39 @@ body {
 }
 
 .btn-green {
-  background: var(--green);
-  color: #fff;
+  background: var(--misty-green);
+  color: var(--success-text);
+  font-weight: 500;
 }
 
 .btn-teal {
-  background: var(--teal);
-  color: #fff;
+  background: var(--misty-green);
+  color: var(--success-text);
+  font-weight: 500;
 }
 
 .btn-amber {
-  background: var(--amber);
-  color: #fff;
+  background: var(--fusion-yellow);
+  color: var(--warning-text);
+  font-weight: 500;
 }
 
 .btn-secondary {
-  background: #6b7280;
+  background: var(--muted);
   color: #fff;
 }
 
 .btn-done {
-  background: #9ca3af;
+  background: var(--border);
+  color: var(--muted);
+}
+
+.btn-red {
+  background: var(--ember-orange);
   color: #fff;
+}
+.btn-red:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .btn-ghost {
@@ -248,7 +328,7 @@ body {
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary) 0%, #60a5fa 100%);
+  background: linear-gradient(90deg, var(--thunder-blue) 0%, var(--misty-green) 100%);
   border-radius: 12px;
   transition: width 0.4s ease;
 }
@@ -273,18 +353,21 @@ body {
 }
 
 .alert-info {
-  background: var(--info);
-  color: #1e40af;
+  background: var(--thunder-blue-light);
+  color: var(--thunder-blue);
+  border-left: 3px solid var(--thunder-blue);
 }
 
 .alert-success {
-  background: var(--green-light);
-  color: #166534;
+  background: var(--misty-green-light);
+  color: var(--success-text);
+  border-left: 3px solid var(--misty-green);
 }
 
 .alert-error {
-  background: var(--red-light);
-  color: var(--red);
+  background: var(--error-light);
+  color: var(--error);
+  border-left: 3px solid var(--error);
 }
 
 /* ── Misc ────────────────────────────────────────────── */
@@ -295,10 +378,12 @@ body {
 }
 
 code {
-  background: #f0f0f0;
+  background: var(--thunder-blue-light);
+  color: var(--thunder-blue);
   padding: 0.15em 0.4em;
   border-radius: 4px;
   font-size: 0.85em;
+  font-weight: 500;
 }
 
 .footer {
@@ -309,8 +394,101 @@ code {
 }
 
 .footer a {
-  color: var(--primary);
+  color: var(--thunder-blue);
   text-decoration: underline;
+}
+.footer a:hover {
+  color: var(--ember-orange);
+}
+
+/* ── Login Page ──────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--thunder-blue) 0%, #0d3a52 50%, #1a5a7a 100%);
+  padding: 1rem;
+}
+
+.login-card {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(10, 42, 61, 0.15), 0 2px 8px rgba(10, 42, 61, 0.1);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.login-brand h1 {
+  font-size: 2.5rem;
+  font-weight: 600;              /* No bold per Vaisala guidelines */
+  letter-spacing: -0.02em;
+  color: var(--thunder-blue);
+  margin-bottom: 0.15rem;
+}
+
+.login-subtitle {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.login-vaisala {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--thunder-blue);
+  font-weight: 500;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-btn {
+  margin-top: 1.25rem;
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+}
+
+.login-footer-text {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* ── Header top bar (auth info) ─────────────────────── */
+.header-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.header-user {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.btn-sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.header-vaisala {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--thunder-blue);
+  font-weight: 500;
 }
 
 /* ── Responsive ──────────────────────────────────────── */
@@ -323,5 +501,8 @@ code {
   }
   .btn-row {
     flex-direction: column;
+  }
+  .login-card {
+    padding: 2rem 1.25rem;
   }
 }

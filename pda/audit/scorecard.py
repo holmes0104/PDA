@@ -1,4 +1,16 @@
-"""Deterministic checks and LLM rubric scoring; builds Scorecard from rubric YAML."""
+"""Deterministic checks and LLM rubric scoring; builds Scorecard from rubric YAML.
+
+When a ``DocumentClassification`` is provided the scoring logic adapts:
+
+* **Structural clarity** and **freshness** are evaluated only on *buyer* chunks
+  so that operational boilerplate (installation steps, wiring diagrams, safety
+  warnings, multilingual duplicates) does not inflate or deflate scores.
+* **Buyer answerability** (grounding from prompt simulation) should already be
+  fed a buyer-only chunk set by the caller.
+* Dimensions that depend on the fact sheet (completeness, spec precision, etc.)
+  are unaffected because the fact sheet itself should be extracted primarily
+  from buyer-relevant content.
+"""
 
 from datetime import datetime
 from pathlib import Path
@@ -8,7 +20,10 @@ import yaml
 
 from pda.schemas.models import (
     AuditFinding,
+    ContentRole,
     DocumentChunk,
+    DocumentClassification,
+    DocumentType,
     EvidenceRef,
     ProductFactSheet,
     RubricDimension,
@@ -70,11 +85,16 @@ def check_completeness(fact_sheet: ProductFactSheet) -> int:
 
 
 def check_structural_clarity(chunks: list[DocumentChunk]) -> int:
-    """Score 0-10: section headings, chunk length 200-800 tokens, no wall >1500, ordering. 4 sub-checks."""
-    if not chunks:
+    """Score 0-10: section headings, chunk length 200-800 tokens, no wall >1500, ordering. 4 sub-checks.
+
+    Uses only *buyer*-tagged chunks so operational boilerplate doesn't dilute the signal.
+    Falls back to all chunks if none are tagged buyer.
+    """
+    buyer = [c for c in chunks if c.content_role == ContentRole.BUYER] or chunks
+    if not buyer:
         return 0
-    has_headings = any(c.section_heading for c in chunks)
-    tokens = [c.token_count for c in chunks]
+    has_headings = any(c.section_heading for c in buyer)
+    tokens = [c.token_count for c in buyer]
     avg = sum(tokens) / len(tokens) if tokens else 0
     good_length = 200 <= avg <= 800
     no_wall = not any(t > 1500 for t in tokens)
@@ -119,10 +139,15 @@ def check_consistency(fact_sheet: ProductFactSheet, chunks: list[DocumentChunk])
 
 
 def check_freshness(chunks: list[DocumentChunk]) -> int:
-    """Score 0-10: dates, version numbers, 'new'/'updated', copyright."""
-    if not chunks:
+    """Score 0-10: dates, version numbers, 'new'/'updated', copyright.
+
+    Evaluated on buyer-tagged chunks only so boilerplate copyright in
+    operational pages doesn't skew the result.
+    """
+    buyer = [c for c in chunks if c.content_role == ContentRole.BUYER] or chunks
+    if not buyer:
         return 0
-    text = " ".join(c.text for c in chunks).lower()
+    text = " ".join(c.text for c in buyer).lower()
     score = 0
     if re.search(r"\d{4}", text):
         score += 3
@@ -162,16 +187,35 @@ def build_scorecard(
     rubric_path: Path | None = None,
     buyer_answerability_score: float | None = None,
     differentiators_score: float | None = None,
+    classification: DocumentClassification | None = None,
+    deterministic_results: dict | None = None,
+    llm_results: dict | None = None,
 ) -> Scorecard:
     """
     Build full Scorecard from deterministic dimensions and optional LLM rubric scores.
+
     buyer_answerability_score: 0-10 from PromptTestResult average_grounding * 10.
     differentiators_score: 0-10 from LLM rubric (optional).
+    classification: if provided, downstream checks use only buyer-tagged chunks so
+        operational noise (installation steps, wiring, error codes) does not inflate
+        or deflate LLM-discoverability scores.
+    deterministic_results: {check_id: CheckResult} from deterministic_checks module.
+    llm_results: {check_id: LLMCheckResult} from llm_checks module.
     """
     rubric = _load_rubric(rubric_path)
     dimensions_config = rubric.get("dimensions", [])
     thresholds = rubric.get("grade_thresholds", {})
     url_chunks = url_chunks or []
+    deterministic_results = deterministic_results or {}
+    llm_results = llm_results or {}
+
+    # Pre-filter buyer-only chunks for scoring dimensions that should not
+    # be inflated by operational content.
+    buyer_only = [c for c in chunks if c.content_role == ContentRole.BUYER]
+    if not buyer_only:
+        buyer_only = chunks  # fallback: use all if nothing tagged
+
+    doc_type = classification.document_type if classification else DocumentType.MIXED
 
     dimensions: list[RubricDimension] = []
     for dim in dimensions_config:
@@ -182,31 +226,53 @@ def build_scorecard(
         max_score = 10
         score = 0
         details = ""
+        evidence: list[EvidenceRef] = []
 
+        # ── Existing deterministic checks ────────────────────────────
         if dim_id == "completeness":
             score = check_completeness(fact_sheet)
             details = f"Completeness: {score}/10 (non-NOT_FOUND field ratio)."
         elif dim_id == "structural_clarity":
-            score = check_structural_clarity(chunks)
-            details = f"Structural clarity: {score}/10 (headings, chunk size, no wall-of-text)."
+            score = check_structural_clarity(buyer_only)
+            details = f"Structural clarity: {score}/10 (headings, chunk size, no wall-of-text; buyer chunks only)."
         elif dim_id == "spec_precision":
             score = check_spec_precision(fact_sheet)
             details = f"Spec precision: {score}/10."
         elif dim_id == "schema_readiness":
             score = check_schema_readiness(url_chunks)
             details = "Schema.org readiness (URL or neutral)."
+        elif dim_id == "consistency":
+            score = check_consistency(fact_sheet, buyer_only)
+            details = "Consistency: no contradictory specs."
+        elif dim_id == "freshness":
+            score = check_freshness(buyer_only)
+            details = "Freshness signals (dates, version, new/updated; buyer chunks only)."
+
+        # ── New deterministic checks (from deterministic_results) ────
+        elif dim_id in deterministic_results:
+            cr = deterministic_results[dim_id]
+            score = getattr(cr, "score", 5)
+            details = getattr(cr, "details", "")
+            chunk_ids = getattr(cr, "evidence_chunk_ids", [])
+            if chunk_ids:
+                evidence = [EvidenceRef(chunk_ids=chunk_ids)]
+
+        # ── LLM checks (from llm_results) ───────────────────────────
+        elif dim_id in llm_results:
+            lr = llm_results[dim_id]
+            score = getattr(lr, "score", 5)
+            details = getattr(lr, "rationale", "")
+            chunk_ids = getattr(lr, "evidence_chunk_ids", [])
+            if chunk_ids:
+                evidence = [EvidenceRef(chunk_ids=chunk_ids)]
+
+        # ── Legacy LLM dimensions (backward compat) ─────────────────
         elif dim_id == "unique_differentiators":
             score = int(differentiators_score) if differentiators_score is not None else 5
             details = "LLM rubric: unique differentiators."
         elif dim_id == "buyer_answerability":
             score = int(buyer_answerability_score * 10) if buyer_answerability_score is not None else 5
-            details = "Buyer-question answerability (grounding)."
-        elif dim_id == "consistency":
-            score = check_consistency(fact_sheet, chunks)
-            details = "Consistency: no contradictory specs."
-        elif dim_id == "freshness":
-            score = check_freshness(chunks)
-            details = "Freshness signals (dates, version, new/updated)."
+            details = "Buyer-question answerability (grounding; buyer chunks only)."
 
         dimensions.append(
             RubricDimension(
@@ -216,7 +282,7 @@ def build_scorecard(
                 max_score=max_score,
                 score=min(max_score, max(0, score)),
                 scoring_method="llm_rubric" if method == "llm_rubric" else "deterministic",
-                evidence=[],
+                evidence=evidence,
                 details=details,
             )
         )

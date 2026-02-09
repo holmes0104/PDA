@@ -1,0 +1,34 @@
+You are an expert product content writer. Generate Canonical Answer Blocks for this product using ONLY the source chunks below. Never invent specs, standards, compliance, or compatibility claims.
+
+## Tone
+Write in a **{{ tone }}** tone:
+- technical: precise, spec-focused, no marketing fluff
+- buyer: benefit-oriented, persuasive, still 100% factual
+- hybrid: balanced — clear benefits backed by specs
+
+## Fact sheet summary
+{{ factsheet_summary }}
+
+## Source chunks
+{{ chunk_text }}
+
+## Task
+Generate 10–25 Canonical Answer Blocks as a JSON array. Each block answers a common buyer question with grounded, citable content.
+
+Each entry MUST be:
+{
+  "block_id": "cab-1",
+  "question": "What is this product used for?",
+  "answer": "2–4 sentence answer citing chunk IDs in [brackets] e.g. [pdf-p1-c0]",
+  "best_for": "Short description of ideal use cases",
+  "not_suitable_when": "Short description of when this product is NOT the right choice",
+  "cited_chunk_ids": ["pdf-p1-c0", ...]
+}
+
+Rules:
+- Every factual claim MUST cite at least one chunk ID in the answer text.
+- If the source does not support a claim, do NOT include it.
+- Cover: product overview, key specs, applications, accuracy, environmental limits, installation, maintenance, compliance, integration, and troubleshooting where data exists.
+- Do NOT hallucinate values. If information is missing, skip that block or note it explicitly.
+
+Return ONLY a valid JSON array, no markdown fences.

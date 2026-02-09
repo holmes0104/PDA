@@ -1,0 +1,39 @@
+You are an expert product content writer. Generate a comprehensive Product-page FAQ for this product using ONLY the source chunks below. Never invent specs, standards, compliance, or compatibility claims.
+
+## Tone
+Write in a **{{ tone }}** tone.
+
+## Fact sheet summary
+{{ factsheet_summary }}
+
+## Source chunks
+{{ chunk_text }}
+
+## Task
+Generate 20–40 FAQ entries as a JSON array. Group them by theme using the "theme" field.
+
+Required themes (include at least one question per theme where data exists):
+- selection
+- installation
+- accuracy_specs
+- environment_limits
+- compatibility_integration
+- maintenance_calibration
+- troubleshooting
+
+Each entry MUST be:
+{
+  "faq_id": "faq-1",
+  "theme": "selection",
+  "question": "Which model variant should I choose for outdoor applications?",
+  "answer": "Answer citing chunk IDs in [brackets] e.g. [pdf-p2-c1]",
+  "cited_chunk_ids": ["pdf-p2-c1", ...]
+}
+
+Rules:
+- Every answer MUST cite at least one chunk ID.
+- Do NOT invent specifications or compatibility claims not in the source.
+- If a theme has no supporting data, include one entry stating: "No information available in the provided documentation."
+- Aim for 4–8 questions per theme where content exists.
+
+Return ONLY a valid JSON array, no markdown fences.

@@ -17,11 +17,32 @@ services:
       - PDA_DATA_DIR=/data
       - PORT=8000
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - PDA_VECTOR_BACKEND=${PDA_VECTOR_BACKEND:-chroma}
+      - PDA_DATABASE_URL=${PDA_DATABASE_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pda
+      POSTGRES_PASSWORD: pda_dev
+      POSTGRES_DB: pda
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pda"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build:
@@ -35,3 +56,6 @@ services:
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
     depends_on:
       - backend
+
+volumes:
+  pgdata:

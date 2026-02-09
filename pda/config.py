@@ -4,10 +4,16 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Locate the project root .env file — works regardless of CWD
+# (backend/ vs project root vs anywhere else)
+_THIS_DIR = Path(__file__).resolve().parent          # pda/
+_PROJECT_ROOT = _THIS_DIR.parent                     # PDA/
+_ENV_FILE = _PROJECT_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE) if _ENV_FILE.exists() else ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -20,7 +26,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str | None = None
-    pda_openai_model: str = "gpt-4o"
+    pda_openai_model: str = "gpt-5.2"
 
     # Anthropic
     anthropic_api_key: str | None = None
@@ -31,6 +37,12 @@ class Settings(BaseSettings):
 
     # Output (deprecated, use pda_data_dir)
     pda_output_dir: str | None = None
+
+    # Vector store backend: "chroma" (default) or "pgvector"
+    pda_vector_backend: str = "chroma"
+
+    # Database URL for pgvector backend (only used when pda_vector_backend=pgvector)
+    pda_database_url: str | None = None
 
     # CORS origins (comma-separated). Defaults to localhost dev.
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -43,8 +55,15 @@ class Settings(BaseSettings):
 
     @property
     def data_dir(self) -> Path:
-        """Get data directory as Path (OS-agnostic)."""
-        return Path(self.pda_data_dir).resolve()
+        """Get data directory as Path (OS-agnostic).
+        
+        Relative paths are resolved against the project root (not CWD),
+        so the backend works whether started from project root or backend/.
+        """
+        p = Path(self.pda_data_dir)
+        if not p.is_absolute():
+            return (_PROJECT_ROOT / p).resolve()
+        return p.resolve()
 
     @property
     def output_dir(self) -> Path:

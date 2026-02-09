@@ -1,0 +1,40 @@
+You are an expert product content writer. Generate Use-case Pages for this product using ONLY the source chunks below. Never invent specs, standards, compliance, or compatibility claims.
+
+## Tone
+Write in a **{{ tone }}** tone.
+
+## Fact sheet summary
+{{ factsheet_summary }}
+
+## Source chunks
+{{ chunk_text }}
+
+## Task
+Generate 3–8 use-case pages as a JSON array. Each page covers one real-world application scenario.
+
+Each entry MUST be:
+{
+  "page_id": "uc-1",
+  "title": "Use Case: [Application Name]",
+  "problem_context": "Describe the industry problem or need (1–3 sentences) [chunk-ids]",
+  "requirements": "What the application requires from a measurement/product perspective [chunk-ids]",
+  "why_this_product_fits": "How this product meets those requirements — use measurable constraints and specs from the source [chunk-ids]",
+  "implementation_notes": "Practical notes on deployment, setup, or integration [chunk-ids]",
+  "faqs": [
+    {
+      "question": "A question specific to this use case",
+      "answer": "Answer grounded in source [chunk-ids]",
+      "cited_chunk_ids": ["..."]
+    }
+  ],
+  "cited_chunk_ids": ["all chunk IDs used across this page"]
+}
+
+Rules:
+- All claims MUST be grounded in the source chunks.
+- Include at least 1–2 FAQs per use case.
+- Use measurable constraints (e.g., temperature ranges, accuracy values) from the source.
+- Do NOT invent applications or scenarios not supported by the source data.
+- If fewer than 3 applications exist in the source, generate only what is supported.
+
+Return ONLY a valid JSON array, no markdown fences.

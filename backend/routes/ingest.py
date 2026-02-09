@@ -23,6 +23,8 @@ class IngestResponse(BaseModel):
     chunks_count: int
     chunks_path: str
     raw_extraction_path: str
+    document_type: str = ""
+    document_type_confidence: float = 0.0
 
 
 @router.post("/ingest", response_model=IngestResponse, status_code=status.HTTP_201_CREATED)
@@ -59,7 +61,7 @@ async def ingest_pdf(
     logger.info("Ingesting PDF: %s (project: %s, url: %s)", pdf.filename, project_id, url or "none")
 
     try:
-        chunks = run_ingestion(
+        chunks, classification = run_ingestion(
             pdf_path=str(pdf_path),
             url=url,
             out_dir=project_dir,
@@ -73,4 +75,6 @@ async def ingest_pdf(
         chunks_count=len(chunks),
         chunks_path=str(project_dir / "chunks.jsonl"),
         raw_extraction_path=str(project_dir / "raw_extraction"),
+        document_type=classification.document_type.value,
+        document_type_confidence=round(classification.confidence, 2),
     )

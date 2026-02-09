@@ -1,11 +1,16 @@
-"""Buyer-prompt simulator: run canonical prompts against content, compute grounding, optional before/after diff."""
+"""Buyer-prompt simulator: run canonical prompts against content, compute grounding, optional before/after diff.
+
+When chunks carry a ``content_role`` tag the simulator uses **only buyer-tagged
+chunks** for context so that operational noise (installation steps, wiring,
+error codes, safety warnings) does not artificially inflate grounding scores.
+"""
 
 import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from pda.schemas.models import DocumentChunk, PromptTestResult, SinglePromptResult
+from pda.schemas.models import ContentRole, DocumentChunk, PromptTestResult, SinglePromptResult
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 
@@ -54,6 +59,12 @@ def _missing_info(response: str) -> list[str]:
     return []
 
 
+def _buyer_only(chunks: list[DocumentChunk]) -> list[DocumentChunk]:
+    """Return buyer-tagged chunks; fall back to all if none tagged."""
+    buyer = [c for c in chunks if c.content_role == ContentRole.BUYER]
+    return buyer if buyer else chunks
+
+
 def run_prompt_simulation(
     chunks: list[DocumentChunk],
     llm_provider: object,
@@ -64,10 +75,15 @@ def run_prompt_simulation(
     """
     Run each buyer prompt with chunk context, collect response and grounding.
     llm_provider must have .complete(prompt: str) -> str.
+
+    Only **buyer-tagged** chunks are used for context and grounding so
+    operational noise does not inflate scores.
     """
     prompts = buyer_prompts or DEFAULT_BUYER_PROMPTS
-    chunk_ids = [c.chunk_id for c in chunks]
-    context = _chunk_context(chunks)
+    # Filter to buyer-relevant content only
+    sim_chunks = _buyer_only(chunks)
+    chunk_ids = [c.chunk_id for c in sim_chunks]
+    context = _chunk_context(sim_chunks)
     env = Environment(loader=FileSystemLoader(str(PROMPTS_DIR)))
     template = env.get_template("buyer_sim.j2")
     results: list[SinglePromptResult] = []

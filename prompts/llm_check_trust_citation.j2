@@ -1,0 +1,21 @@
+You are an expert product content auditor. Evaluate the following product content for **Trust and Citation Strength** — does the content provide verifiable claims with test methods, standards references, measurement conditions, and proper scoping?
+
+## Source content (chunks)
+{{ chunk_text }}
+
+## Task
+Score 0-10 and return **only** a JSON object with these keys:
+- "score_0_10": integer 0-10 (10 = all claims well-cited and verifiable)
+- "rationale": string explaining the score
+- "recommendations": list of strings — actionable improvements
+- "evidence_chunk_ids": list of chunk IDs that informed your evaluation
+
+Criteria:
+- Are performance claims backed by test methods or standards (e.g. IEC, ISO, ASTM)?
+- Are measurement conditions stated (temperature, humidity, pressure, sample size)?
+- Are accuracy/uncertainty values given with confidence levels?
+- Are claims properly scoped (e.g. "at 25 °C" not just "accurate")?
+- Is the source of third-party data or certifications identified?
+- Are marketing superlatives ("best", "leading") backed by evidence?
+
+Return ONLY valid JSON, no markdown fences.

@@ -1,0 +1,27 @@
+You are an evaluation judge. Score the following answer to a buyer question based on the source chunks provided.
+
+## Buyer question
+{{ buyer_prompt }}
+
+## Answer being evaluated
+{{ answer }}
+
+## Source chunks (ground truth)
+{{ chunk_text }}
+
+{% if must_cover %}
+## Must-cover points
+The answer should cover these points:
+{% for point in must_cover %}
+- {{ point }}
+{% endfor %}
+{% endif %}
+
+## Task
+Evaluate and return **only** a JSON object with these keys:
+- "completeness": integer 0-10 (does the answer cover all relevant information from the source?)
+- "correctness": integer 0-10 (is the answer factually accurate relative to the source?)
+- "citation_coverage": integer 0-10 (does every claim cite a source chunk?)
+- "rationale": string explaining the scores
+
+Return ONLY valid JSON, no markdown fences.

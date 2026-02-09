@@ -1,0 +1,26 @@
+You are a product data analyst. Analyze the extracted fact sheet below and identify missing or ambiguous fields that are critical for generating high-quality product content.
+
+## Extracted fact sheet
+{{ factsheet_json }}
+
+## Task
+Return a JSON object with:
+{
+  "missing_fields": ["list of field names that are 'NOT_FOUND' or empty"],
+  "questions": [
+    {
+      "field": "field_name",
+      "question": "A targeted question the user can answer to fill this gap",
+      "why_needed": "Brief explanation of why this field matters for content generation"
+    }
+  ],
+  "can_generate": true or false
+}
+
+Rules:
+- Generate 3–7 targeted questions for the most impactful missing fields.
+- Set can_generate to false ONLY if product_name is missing or there are fewer than 2 key_specs.
+- Prioritize questions about: product name/category, key specifications, primary use cases, operating ranges, and accuracy.
+- Do NOT ask about fields that are genuinely optional (e.g., pricing, warranty details).
+
+Return ONLY a valid JSON object, no markdown fences.

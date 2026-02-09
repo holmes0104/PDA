@@ -9,6 +9,7 @@ from rich.console import Console
 from pda.audit import run_critic_pass, run_gap_analysis
 from pda.ingest.pdf_parser import PDFParseError
 from pda.audit.scorecard import build_scorecard
+from pda.classify import classify_document, tag_chunks
 from pda.config import get_settings
 from pda.content_pack.generator import generate_content_pack
 from pda.content_pack.content_pack_from_factsheet import (
@@ -90,6 +91,23 @@ def audit(
             console.print(f"[yellow]Warning: URL scraping skipped ({e})[/yellow]")
         chunks = chunks + url_chunks
 
+    # --- Document classification & content-role tagging ---
+    console.print("Classifying document...")
+    classification = classify_document(chunks)
+    tag_chunks(chunks, classification)
+    buyer_n = sum(1 for c in chunks if c.content_role.value == "buyer")
+    oper_n = sum(1 for c in chunks if c.content_role.value == "operational")
+    console.print(
+        f"  Document type: [bold]{classification.document_type.value}[/bold] "
+        f"(confidence {classification.confidence:.0%})  |  "
+        f"buyer chunks: {buyer_n}, operational chunks: {oper_n}"
+    )
+    # Persist classification
+    import json as _json
+    cls_path = out_dir / "classification.json"
+    with open(cls_path, "w", encoding="utf-8") as _f:
+        _json.dump(classification.model_dump(), _f, indent=2, ensure_ascii=False)
+
     console.print("Extracting product facts...")
     llm = get_provider(
         provider_name,
@@ -121,6 +139,7 @@ def audit(
         chunks,
         url_chunks=url_chunks if url_chunks else None,
         buyer_answerability_score=buyer_score,
+        classification=classification,
     )
 
     console.print("Gap analysis and critic pass...")
@@ -172,7 +191,11 @@ def audit(
         console.print(f"Wrote {out_dir / 'report.html'}")
     with open(out_dir / "audit.json", "w", encoding="utf-8") as f:
         json.dump(
-            {"scorecard": scorecard.model_dump(), "findings": [x.model_dump() for x in findings]},
+            {
+                "classification": classification.model_dump(),
+                "scorecard": scorecard.model_dump(),
+                "findings": [x.model_dump() for x in findings],
+            },
             f,
             indent=2,
         )
@@ -211,6 +234,18 @@ def factsheet(
     if not chunks:
         console.print("[red]Error: no chunks from project (add PDFs or check paths).[/red]")
         raise typer.Exit(1)
+
+    # --- Document classification & content-role tagging ---
+    console.print("Classifying document...")
+    classification = classify_document(chunks)
+    tag_chunks(chunks, classification)
+    buyer_n = sum(1 for c in chunks if c.content_role.value == "buyer")
+    oper_n = sum(1 for c in chunks if c.content_role.value == "operational")
+    console.print(
+        f"  Document type: [bold]{classification.document_type.value}[/bold] "
+        f"(confidence {classification.confidence:.0%})  |  "
+        f"buyer chunks: {buyer_n}, operational chunks: {oper_n}"
+    )
 
     # Vector store under project
     persist_dir = project_dir / "chroma_data"
@@ -436,11 +471,15 @@ def ingest(
     url: str | None = typer.Option(None, "--url", help="Optional product page URL"),
     out: str = typer.Option(..., "--out", help="Output project directory"),
 ):
-    """Extract text from PDF (and optionally URL), chunk, save chunks.jsonl and raw_extraction/."""
+    """Extract text from PDF (and optionally URL), chunk, classify, tag, save chunks.jsonl and raw_extraction/."""
     console = Console()
     try:
-        chunks = run_ingestion(pdf_path=pdf, url=url, out_dir=Path(out))
+        chunks, classification = run_ingestion(pdf_path=pdf, url=url, out_dir=Path(out))
         console.print(f"Wrote {Path(out) / 'chunks.jsonl'} ({len(chunks)} chunks)")
+        console.print(
+            f"  Document type: [bold]{classification.document_type.value}[/bold] "
+            f"(confidence {classification.confidence:.0%})"
+        )
         console.print(f"Raw extraction: {Path(out) / 'raw_extraction'}")
         console.print("[green]Done.[/green]")
     except (PDFParseError, FileNotFoundError) as e:
@@ -449,6 +488,72 @@ def ingest(
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
+
+
+@app.command("eval")
+def eval_harness(
+    project: str = typer.Option(..., "--project", help="Project directory (PDFs already ingested)"),
+    prompts: str = typer.Option(..., "--prompts", help="Path to YAML prompts file"),
+    out: str = typer.Option(None, "--out", help="Output directory (default: <project>/eval_output/)"),
+    store_backend: str = typer.Option(None, "--store", help="Vector store backend: chroma | pgvector"),
+    provider: str = typer.Option(None, help="LLM provider: openai | anthropic"),
+):
+    """Run the RAG evaluation harness: YAML prompts -> answers with citations -> scored dashboard + CSV."""
+    from pda.eval.harness import run_eval_harness
+    from pda.store import get_vector_store
+
+    console = Console()
+    settings = get_settings()
+    project_dir = Path(project)
+    if not project_dir.is_dir():
+        console.print(f"[red]Error: project is not a directory: {project_dir}[/red]")
+        raise typer.Exit(1)
+
+    out_dir = Path(out) if out else project_dir / "eval_output"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Vector store
+    backend = store_backend or settings.pda_vector_backend
+    chroma_dir = project_dir / "chroma_data"
+
+    # If no chunks are indexed yet, index them now
+    pdf_paths = list(project_dir.glob("**/*.pdf"))
+    chunks_list = []
+    for pdf_path in pdf_paths:
+        try:
+            pages = parse_pdf(str(pdf_path))
+            chunks_list.extend(
+                chunk_document(pages, source_file=pdf_path.name, source_type=ChunkSource.PDF)
+            )
+        except Exception as e:
+            console.print(f"[yellow]Skipping {pdf_path}: {e}[/yellow]")
+
+    store = get_vector_store(
+        backend=backend,
+        collection_name="pda_eval",
+        persist_directory=str(chroma_dir),
+        embedding_model=settings.pda_embedding_model,
+        openai_api_key=settings.openai_api_key,
+        database_url=settings.pda_database_url,
+        project_id=project_dir.name,
+    )
+    if chunks_list:
+        console.print(f"Indexing {len(chunks_list)} chunks...")
+        store.add_chunks(chunks_list)
+
+    provider_name = (provider or settings.pda_llm_provider).lower()
+    llm = get_provider(
+        provider_name,
+        api_key=settings.openai_api_key if provider_name == "openai" else settings.anthropic_api_key,
+        model=settings.pda_openai_model if provider_name == "openai" else settings.pda_anthropic_model,
+    )
+
+    console.print(f"Running eval harness with {prompts}...")
+    results = run_eval_harness(prompts, store, llm, out_dir)
+    console.print(f"Evaluated {len(results)} prompts")
+    console.print(f"Results: {out_dir / 'results.csv'}")
+    console.print(f"Dashboard: {out_dir / 'dashboard.html'}")
+    console.print("[green]Done.[/green]")
 
 
 if __name__ == "__main__":

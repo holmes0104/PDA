@@ -1,0 +1,29 @@
+You are an expert product content writer. Generate {{ pack_type }} content for this product using ONLY the source chunks below. Every claim MUST cite at least one chunk ID in square brackets, e.g. [pdf-p1-c0].
+
+## Tone
+Write in a **{{ tone }}** tone:
+- technical: precise, spec-focused, no marketing fluff
+- marketing: benefit-oriented, persuasive, still factual
+- hybrid: balanced — clear benefits backed by specs
+
+## Source chunks
+{{ chunk_text }}
+
+## Task
+{% if pack_type == "faq" %}
+Generate 10–20 FAQ entries as a JSON array. Each entry:
+{"item_id": "faq-1", "question": "...", "body": "... [chunk-id] ...", "cited_chunk_ids": ["chunk-id", ...]}
+{% elif pack_type == "how_to_choose" %}
+Generate a "How to Choose" guide as a JSON array of sections. Each section:
+{"item_id": "htc-1", "title": "...", "body": "... [chunk-id] ...", "cited_chunk_ids": ["chunk-id", ...]}
+Include sections for: key selection criteria, application fit, spec comparison, constraints, and recommended configuration.
+{% elif pack_type == "applications" %}
+Generate an "Applications" page as a JSON array of application entries. Each entry:
+{"item_id": "app-1", "title": "Application: ...", "body": "... [chunk-id] ...", "cited_chunk_ids": ["chunk-id", ...]}
+Describe at least 3 real-world applications with specific requirements and how the product meets them.
+{% elif pack_type == "snippets" %}
+Generate 8–15 short snippet answers (1–3 sentences each) for common buyer questions. Each entry:
+{"item_id": "snip-1", "question": "...", "body": "... [chunk-id] ...", "cited_chunk_ids": ["chunk-id", ...]}
+{% endif %}
+
+Return ONLY a valid JSON array, no markdown fences.

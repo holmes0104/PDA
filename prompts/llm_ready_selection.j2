@@ -1,0 +1,47 @@
+You are an expert product content writer. Generate Selection Guidance for this product using ONLY the source chunks below. Never invent specs, standards, compliance, or compatibility claims.
+
+## Tone
+Write in a **{{ tone }}** tone.
+
+## Fact sheet summary
+{{ factsheet_summary }}
+
+## Source chunks
+{{ chunk_text }}
+
+## Task
+Generate selection guidance as a single JSON object with these fields:
+
+{
+  "decision_criteria": [
+    {
+      "criterion_id": "dc-1",
+      "statement": "Choose this product if you need [specific requirement] because [grounded reason] [pdf-p1-c0]",
+      "cited_chunk_ids": ["pdf-p1-c0"]
+    }
+  ],
+  "comparison_table": [
+    {
+      "variant": "Model A",
+      "attributes": {
+        "measurement_range": "...",
+        "accuracy": "...",
+        "output": "...",
+        "environment": "..."
+      },
+      "cited_chunk_ids": ["pdf-p3-c2"]
+    }
+  ],
+  "decision_tree_md": "Markdown-formatted decision tree (use nested bullet list with -> arrows)",
+  "missing_info": ["List any comparison attributes that are NOT available in the source"],
+  "cited_chunk_ids": ["all chunk IDs used across this section"]
+}
+
+Rules:
+- Generate 3–8 decision criteria as "Choose this product if…" statements.
+- If multiple model variants exist in the source, generate a comparison table with one row per variant.
+- If the source does NOT contain enough info to compare variants, leave comparison_table empty and add items to missing_info.
+- NEVER fabricate model names, specs, or compatibility.
+- Every statement must cite at least one chunk ID.
+
+Return ONLY a valid JSON object, no markdown fences.

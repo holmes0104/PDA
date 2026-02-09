@@ -1,4 +1,4 @@
-"""FastAPI backend for PDA web app."""
+"""FastAPI backend for PDA web app — Designed for Vaisala by Thanh Nguyen (Holmes)."""
 
 import logging
 import sys
@@ -14,6 +14,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pda.config import get_settings
+from backend.auth import PUBLIC_PATHS, validate_token
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -21,22 +22,55 @@ logging.basicConfig(level=logging.INFO)
 settings = get_settings()
 
 app = FastAPI(
-    title="PDA API",
-    version="0.1.0",
+    title="PDA API — Vaisala",
+    description="LLM-Ready Product Content Generator. Designed for Vaisala by Thanh Nguyen (Holmes).",
+    version="0.3.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
 
+
 # ---------------------------------------------------------------------------
-# CORS — controlled via CORS_ORIGINS env var
+# Authentication middleware — reject unauthenticated requests to protected paths
 # ---------------------------------------------------------------------------
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Enforce bearer-token auth on all non-public API routes."""
+    path = request.url.path.rstrip("/")
+
+    # Allow public paths, OPTIONS (CORS preflight), and Swagger/OpenAPI assets
+    if (
+        request.method == "OPTIONS"
+        or path in PUBLIC_PATHS
+        or f"{path}/" in PUBLIC_PATHS
+        or path.startswith("/api/docs")
+        or path.startswith("/api/redoc")
+        or path.startswith("/api/openapi")
+    ):
+        return await call_next(request)
+
+    # Everything under /api/ requires auth (except the above)
+    if path.startswith("/api/"):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            return Response(
+                content='{"detail":"Authentication required"}',
+                status_code=401,
+                media_type="application/json",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        token = auth_header.split(" ", 1)[1]
+        session = validate_token(token)
+        if not session:
+            return Response(
+                content='{"detail":"Invalid or expired token"}',
+                status_code=401,
+                media_type="application/json",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    return await call_next(request)
+
 
 # ---------------------------------------------------------------------------
 # Basic in-memory rate limiter (per IP, 30 requests / 60 s for mutating routes)
@@ -68,6 +102,25 @@ async def rate_limit_middleware(request: Request, call_next):
 
 
 # ---------------------------------------------------------------------------
+# CORS — added LAST so it is the OUTERMOST middleware.
+# In Starlette, add_middleware uses LIFO: last-added = outermost.
+# @app.middleware("http") also calls add_middleware internally.
+# CORSMiddleware MUST wrap auth & rate-limit so that CORS headers
+# are present on ALL responses (including 401/429 error responses).
+# ---------------------------------------------------------------------------
+cors_origins = settings.cors_origin_list
+logger.info("CORS configured for origins: %s", cors_origins)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+
+# ---------------------------------------------------------------------------
 # Health & root
 # ---------------------------------------------------------------------------
 class HealthResponse(BaseModel):
@@ -85,16 +138,21 @@ async def health():
 @app.get("/api/")
 async def root():
     """API root."""
-    return {"message": "PDA API", "version": "0.1.0"}
+    return {
+        "message": "PDA API — Designed for Vaisala by Thanh Nguyen (Holmes)",
+        "version": "0.2.0",
+    }
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
-from backend.routes import audit, downloads, factsheet, ingest, simulate, verify  # noqa: E402
+from backend.routes import audit, auth, content_pack, downloads, factsheet, ingest, simulate, verify  # noqa: E402
 
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(ingest.router, prefix="/api", tags=["ingest"])
 app.include_router(factsheet.router, prefix="/api", tags=["factsheet"])
+app.include_router(content_pack.router, prefix="/api", tags=["content_pack"])
 app.include_router(audit.router, prefix="/api", tags=["audit"])
 app.include_router(simulate.router, prefix="/api", tags=["simulate"])
 app.include_router(verify.router, prefix="/api", tags=["verify"])

@@ -2,6 +2,7 @@
 
 from pda.schemas.models import (
     AuditFinding,
+    EvidenceRef,
     FindingCategory,
     FindingSeverity,
     ProductFactSheet,
@@ -25,6 +26,8 @@ def _is_missing(fv: object) -> bool:
 def run_gap_analysis(
     fact_sheet: ProductFactSheet,
     scorecard: Scorecard,
+    deterministic_results: list | None = None,
+    llm_results: list | None = None,
 ) -> list[AuditFinding]:
     """
     Generate findings for missing fields and low-scoring dimensions.
@@ -95,22 +98,75 @@ def run_gap_analysis(
         )
         fid += 1
 
-    # Low scorecard dimensions
+    # Low scorecard dimensions (both deterministic and LLM)
     for dim in scorecard.dimensions:
-        if dim.score < 5 and dim.scoring_method == "deterministic":
+        if dim.score < 5:
+            cat = FindingCategory.STRUCTURE if "structural" in dim.dimension_id else FindingCategory.DISCOVERABILITY
             findings.append(
                 AuditFinding(
                     finding_id=f"F-{fid:03d}",
-                    category=FindingCategory.STRUCTURE if "structural" in dim.dimension_id else FindingCategory.DISCOVERABILITY,
+                    category=cat,
                     severity=FindingSeverity.MEDIUM,
                     title=f"Low score: {dim.name}",
                     description=dim.details,
-                    evidence=[],
+                    evidence=dim.evidence,
                     is_grounded=False,
                     recommendation=f"Improve {dim.name.lower()} to increase LLM-readiness.",
                     critic_verified=False,
                 )
             )
             fid += 1
+
+    # Incorporate deterministic check recommendations
+    if deterministic_results:
+        for cr in deterministic_results:
+            for rec in getattr(cr, "recommendations", []):
+                findings.append(
+                    AuditFinding(
+                        finding_id=f"F-{fid:03d}",
+                        category=FindingCategory.STRUCTURE,
+                        severity=FindingSeverity.MEDIUM,
+                        title=f"Check: {getattr(cr, 'name', '')}",
+                        description=getattr(cr, "details", ""),
+                        evidence=[EvidenceRef(chunk_ids=getattr(cr, "evidence_chunk_ids", []))]
+                        if getattr(cr, "evidence_chunk_ids", [])
+                        else [],
+                        is_grounded=False,
+                        recommendation=rec,
+                        critic_verified=False,
+                    )
+                )
+                fid += 1
+
+    # Incorporate LLM check recommendations
+    if llm_results:
+        for lr in llm_results:
+            for rec in getattr(lr, "recommendations", []):
+                findings.append(
+                    AuditFinding(
+                        finding_id=f"F-{fid:03d}",
+                        category=FindingCategory.DISCOVERABILITY,
+                        severity=FindingSeverity.MEDIUM,
+                        title=f"LLM check: {getattr(lr, 'name', '')}",
+                        description=getattr(lr, "rationale", ""),
+                        evidence=[EvidenceRef(chunk_ids=getattr(lr, "evidence_chunk_ids", []))]
+                        if getattr(lr, "evidence_chunk_ids", [])
+                        else [],
+                        is_grounded=False,
+                        recommendation=rec,
+                        critic_verified=False,
+                    )
+                )
+                fid += 1
+
+    # Sort findings by severity (critical first) then by expected score impact
+    severity_order = {
+        FindingSeverity.CRITICAL: 0,
+        FindingSeverity.HIGH: 1,
+        FindingSeverity.MEDIUM: 2,
+        FindingSeverity.LOW: 3,
+        FindingSeverity.INFO: 4,
+    }
+    findings.sort(key=lambda f: severity_order.get(f.severity, 5))
 
     return findings

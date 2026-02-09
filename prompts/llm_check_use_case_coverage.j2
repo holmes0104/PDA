@@ -1,0 +1,19 @@
+You are an expert product content auditor. Evaluate the following product content for **Use-Case Coverage** — does the content describe enough real-world use cases and applications for a buyer to understand where this product fits?
+
+## Source content (chunks)
+{{ chunk_text }}
+
+## Task
+Score 0-10 and return **only** a JSON object with these keys:
+- "score_0_10": integer 0-10 (10 = comprehensive use-case coverage)
+- "rationale": string explaining the score
+- "recommendations": list of strings — actionable improvements
+- "evidence_chunk_ids": list of chunk IDs that informed your evaluation
+
+Criteria:
+- Are at least 3 distinct use cases or applications described?
+- Are use cases concrete (industry, process, scenario) rather than generic?
+- Are use-case-specific requirements or configurations mentioned?
+- Does the content explain *why* this product is suitable for each use case?
+
+Return ONLY valid JSON, no markdown fences.

@@ -1,4 +1,4 @@
-"""Download API routes for serving generated files."""
+"""Download API routes for serving generated files (including PDF export)."""
 
 import logging
 from pathlib import Path
@@ -11,6 +11,40 @@ from pda.config import get_settings
 logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
+
+
+@router.post("/download/{project_id}/generate_pdf")
+async def generate_pdf(project_id: str):
+    """Generate a PDF from the existing HTML report on disk."""
+    project_dir = settings.data_dir / "projects" / project_id
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    html_path = project_dir / "output" / "report.html"
+    if not html_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="HTML report not found. Run the audit first.",
+        )
+
+    try:
+        from pda.report.pdf import write_pdf_report
+    except ImportError:
+        raise HTTPException(
+            status_code=501,
+            detail="PDF export requires the xhtml2pdf package. Install with: pip install xhtml2pdf",
+        )
+
+    html_content = html_path.read_text(encoding="utf-8")
+    pdf_path = project_dir / "output" / "report.pdf"
+
+    try:
+        write_pdf_report(pdf_path, html_content)
+    except Exception as e:
+        logger.exception("PDF generation failed")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)[:300]}")
+
+    return {"status": "ok", "pdf_path": str(pdf_path)}
 
 
 @router.get("/download/{project_id}/{file_type}")
@@ -28,6 +62,7 @@ async def download_file(project_id: str, file_type: str):
         "factsheet_provenance": project_dir / "factsheet_provenance.json",
         "report_md": project_dir / "output" / "report.md",
         "report_html": project_dir / "output" / "report.html",
+        "report_pdf": project_dir / "output" / "report.pdf",
         "audit_json": project_dir / "output" / "audit.json",
     }
 
@@ -39,7 +74,16 @@ async def download_file(project_id: str, file_type: str):
         "jsonld": "jsonld_product_skeleton.json",
     }
 
-    valid_types = set(file_map.keys()) | set(content_pack_files.keys()) | {"verifier_report"}
+    # LLM-ready content pack files (in content_pack/ directory)
+    llm_content_pack_files = {
+        "canonical_answers": "canonical_answers.md",
+        "content_pack_faq": "faq.md",
+        "selection_guidance": "selection_guidance.md",
+        "content_pack_json": "content_pack.json",
+        "content_pack_manifest": "manifest.json",
+    }
+
+    valid_types = set(file_map.keys()) | set(content_pack_files.keys()) | set(llm_content_pack_files.keys()) | {"verifier_report"}
     if file_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Unknown file type: {file_type}")
 
@@ -54,6 +98,12 @@ async def download_file(project_id: str, file_type: str):
         file_path = project_dir / "output" / filename
         if not file_path.exists():
             file_path = project_dir / "outputs" / filename
+    elif file_type in llm_content_pack_files:
+        filename = llm_content_pack_files[file_type]
+        file_path = project_dir / "content_pack" / filename
+    elif file_type.startswith("usecase_"):
+        # Dynamic use-case page files: usecase_uc-1, usecase_uc-2, etc.
+        file_path = project_dir / "content_pack" / f"{file_type}.md"
     else:
         file_path = file_map[file_type]
 
@@ -66,6 +116,7 @@ async def download_file(project_id: str, file_type: str):
         "jsonl": "application/jsonl",
         "md": "text/markdown",
         "html": "text/html",
+        "pdf": "application/pdf",
     }
     suffix = file_path.suffix.lstrip(".")
     media_type = media_types.get(suffix, "application/octet-stream")

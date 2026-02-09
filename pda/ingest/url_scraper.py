@@ -1,7 +1,10 @@
 """URL scraping for product pages: fetch and extract main content with trafilatura."""
 
+from __future__ import annotations
+
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 import trafilatura
@@ -29,6 +32,15 @@ class URLSection:
     text: str
 
 
+@dataclass
+class URLTable:
+    """A table extracted from a URL page."""
+
+    heading_path: str  # nearest heading context
+    rows: list[list[str]] = field(default_factory=list)
+    caption: str | None = None
+
+
 def scrape_url_structured(url: str, timeout: float = 15.0) -> tuple[str, list[URLSection]]:
     """
     Fetch URL and extract main content with heading structure.
@@ -45,6 +57,57 @@ def scrape_url_structured(url: str, timeout: float = 15.0) -> tuple[str, list[UR
 
     sections = _parse_markdown_sections(markdown)
     return html, sections
+
+
+def scrape_url_with_tables(
+    url: str, timeout: float = 15.0,
+) -> tuple[str, list[URLSection], list[URLTable]]:
+    """
+    Like ``scrape_url_structured`` but also extracts ``<table>`` elements
+    from the raw HTML using BeautifulSoup.
+
+    Returns (raw_html, sections, tables).
+    """
+    with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+        response = client.get(url)
+        response.raise_for_status()
+        html = response.text
+
+    markdown = trafilatura.extract(html, output_format="markdown") or ""
+    sections = _parse_markdown_sections(markdown)
+
+    tables = _extract_html_tables(html)
+    return html, sections, tables
+
+
+def _extract_html_tables(html: str) -> list[URLTable]:
+    """Parse ``<table>`` elements from raw HTML using BeautifulSoup."""
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return []  # bs4 optional; degrade gracefully
+
+    soup = BeautifulSoup(html, "html.parser")
+    results: list[URLTable] = []
+    for table_el in soup.find_all("table"):
+        # Nearest heading context
+        heading_path = ""
+        prev = table_el.find_previous(re.compile(r"^h[1-6]$"))
+        if prev:
+            heading_path = prev.get_text(strip=True)
+
+        # Caption
+        caption_el = table_el.find("caption")
+        caption = caption_el.get_text(strip=True) if caption_el else None
+
+        rows: list[list[str]] = []
+        for tr in table_el.find_all("tr"):
+            cells = tr.find_all(["th", "td"])
+            rows.append([c.get_text(strip=True) for c in cells])
+
+        if rows:
+            results.append(URLTable(heading_path=heading_path, rows=rows, caption=caption))
+    return results
 
 
 def _parse_markdown_sections(markdown: str) -> list[URLSection]:

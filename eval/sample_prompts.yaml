@@ -1,0 +1,69 @@
+# Sample evaluation prompts for the PDA benchmark harness.
+# Each prompt has an id, category, the buyer question, and optional must_cover bullets.
+
+prompts:
+  - id: overview-1
+    category: overview
+    prompt: "What is this product and who is it designed for?"
+    must_cover:
+      - product name
+      - target audience or buyer persona
+      - primary category
+
+  - id: specs-1
+    category: specifications
+    prompt: "What are the key technical specifications?"
+    must_cover:
+      - at least 3 specifications with values and units
+      - measurement accuracy or performance data
+
+  - id: use-case-1
+    category: use_cases
+    prompt: "What are the main applications or use cases for this product?"
+    must_cover:
+      - at least 2 distinct use cases
+      - industry or process context
+
+  - id: compare-1
+    category: comparison
+    prompt: "How does this product compare to alternatives? What makes it unique?"
+    must_cover:
+      - differentiators
+      - key specs for comparison
+
+  - id: pricing-1
+    category: pricing
+    prompt: "What does this product cost and what purchasing options are available?"
+    must_cover:
+      - pricing information or availability note
+
+  - id: support-1
+    category: support
+    prompt: "What warranty, support, and maintenance is included?"
+    must_cover:
+      - warranty information
+      - support or service details
+
+  - id: install-1
+    category: installation
+    prompt: "What are the installation requirements and setup steps?"
+    must_cover:
+      - installation requirements or mounting info
+
+  - id: cert-1
+    category: compliance
+    prompt: "What certifications and regulatory standards does this product meet?"
+    must_cover:
+      - certifications or compliance standards
+
+  - id: constraints-1
+    category: constraints
+    prompt: "What are the limitations or environmental constraints?"
+    must_cover:
+      - operating limits or constraints
+
+  - id: integration-1
+    category: integration
+    prompt: "What interfaces, protocols, or integrations does this product support?"
+    must_cover:
+      - connectivity or interface options

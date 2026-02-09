@@ -8,8 +8,16 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+try:
+    from openai import APIError, APIStatusError, RateLimitError
+except ImportError:  # openai not installed — define stubs so except clauses never match
+    APIError = type("APIError", (Exception,), {})
+    APIStatusError = type("APIStatusError", (Exception,), {})
+    RateLimitError = type("RateLimitError", (Exception,), {})
+
 from pda.audit import run_critic_pass, run_gap_analysis
 from pda.audit.scorecard import build_scorecard
+from pda.classify import classify_document, tag_chunks
 from pda.config import get_settings
 from pda.content_pack.generator import generate_content_pack
 from pda.extract.fact_extractor import extract_fact_sheet
@@ -31,6 +39,8 @@ class AuditRequest(BaseModel):
     project_id: str
     url: Optional[list[str]] = None
     allow_unsafe: bool = False
+    llm_provider: Optional[str] = None   # "openai" | "anthropic" — overrides server default
+    llm_model: Optional[str] = None      # e.g. "gpt-4o", "claude-3-5-sonnet-20241022"
 
 
 class AuditResponse(BaseModel):
@@ -74,52 +84,111 @@ async def run_audit(request: AuditRequest):
                 logger.warning("URL scraping skipped for %s: %s", u, e)
         chunks.extend(url_chunks)
 
-    # Extract facts
-    provider_name = settings.pda_llm_provider.lower()
-    llm = get_provider(
-        provider_name,
-        api_key=settings.openai_api_key if provider_name == "openai" else settings.anthropic_api_key,
-        model=settings.pda_openai_model if provider_name == "openai" else settings.pda_anthropic_model,
+    # --- Document classification & content-role tagging ---
+    classification = classify_document(chunks)
+    tag_chunks(chunks, classification)
+    logger.info(
+        "Document classified as %s (confidence=%.2f, buyer=%d, operational=%d)",
+        classification.document_type.value,
+        classification.confidence,
+        sum(1 for c in chunks if c.content_role.value == "buyer"),
+        sum(1 for c in chunks if c.content_role.value == "operational"),
     )
+    # Persist classification alongside project artefacts
+    import json as _json
+    cls_path = project_dir / "classification.json"
+    with open(cls_path, "w", encoding="utf-8") as _f:
+        _json.dump(classification.model_dump(), _f, indent=2, ensure_ascii=False)
+
+    # Extract facts — honour request-level LLM overrides
+    provider_name = (request.llm_provider or settings.pda_llm_provider).lower()
+    if provider_name == "openai":
+        api_key = settings.openai_api_key
+        default_model = settings.pda_openai_model
+    else:
+        api_key = settings.anthropic_api_key
+        default_model = settings.pda_anthropic_model
+    model = request.llm_model or default_model
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"API key not configured for provider '{provider_name}'. Please set {'OPENAI_API_KEY' if provider_name == 'openai' else 'ANTHROPIC_API_KEY'} in .env",
+        )
+    llm = get_provider(provider_name, api_key=api_key, model=model)
+    logger.info("Audit using provider=%s model=%s", provider_name, model)
     try:
         fact_sheet = extract_fact_sheet(chunks, llm)
-    except Exception as e:
+    except (RateLimitError, APIStatusError) as e:
+        status_code = getattr(e, "status_code", None)
         err_msg = str(e)
-        if "insufficient_quota" in err_msg or "429" in err_msg:
+        if status_code == 402 or "insufficient_quota" in err_msg.lower() or "payment" in err_msg.lower() or "429" in err_msg:
+            logger.error("API quota/payment error: %s", err_msg)
             raise HTTPException(
                 status_code=402,
-                detail="OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/settings/organization/billing",
+                detail=f"API quota/payment issue: {err_msg[:200]}. Please check your billing at https://platform.openai.com/settings/organization/billing",
             )
+        logger.exception("API error during fact extraction")
+        raise HTTPException(status_code=500, detail=f"API error during fact extraction: {err_msg[:300]}")
+    except APIError as e:
+        err_msg = str(e)
+        logger.exception("OpenAI API error during fact extraction")
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {err_msg[:300]}")
+    except Exception as e:
+        err_msg = str(e)
         logger.exception("Fact extraction failed")
         raise HTTPException(status_code=500, detail=f"Fact extraction failed: {err_msg[:300]}")
 
     # Scorecard
     try:
         prompt_result = run_prompt_simulation(chunks, llm, source_description=pdf_name)
-    except Exception as e:
+    except (RateLimitError, APIStatusError) as e:
+        status_code = getattr(e, "status_code", None)
         err_msg = str(e)
-        if "insufficient_quota" in err_msg or "429" in err_msg:
+        if status_code == 402 or "insufficient_quota" in err_msg.lower() or "payment" in err_msg.lower() or "429" in err_msg:
+            logger.error("API quota/payment error: %s", err_msg)
             raise HTTPException(
                 status_code=402,
-                detail="OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/settings/organization/billing",
+                detail=f"API quota/payment issue: {err_msg[:200]}. Please check your billing at https://platform.openai.com/settings/organization/billing",
             )
+        logger.exception("API error during prompt simulation")
+        raise HTTPException(status_code=500, detail=f"API error during prompt simulation: {err_msg[:300]}")
+    except APIError as e:
+        err_msg = str(e)
+        logger.exception("OpenAI API error during prompt simulation")
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {err_msg[:300]}")
+    except Exception as e:
+        err_msg = str(e)
         logger.exception("Prompt simulation failed")
         raise HTTPException(status_code=500, detail=f"Prompt simulation failed: {err_msg[:300]}")
 
-    scorecard = build_scorecard(fact_sheet, chunks, buyer_answerability_score=prompt_result.average_grounding)
+    scorecard = build_scorecard(
+        fact_sheet, chunks,
+        buyer_answerability_score=prompt_result.average_grounding,
+        classification=classification,
+    )
 
     # Gap analysis
     findings = run_gap_analysis(fact_sheet, scorecard)
     scorecard.findings = findings
     try:
         findings = run_critic_pass(findings, chunks, llm)
-    except Exception as e:
+    except (RateLimitError, APIStatusError) as e:
+        status_code = getattr(e, "status_code", None)
         err_msg = str(e)
-        if "insufficient_quota" in err_msg or "429" in err_msg:
+        if status_code == 402 or "insufficient_quota" in err_msg.lower() or "payment" in err_msg.lower() or "429" in err_msg:
+            logger.error("API quota/payment error: %s", err_msg)
             raise HTTPException(
                 status_code=402,
-                detail="OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/settings/organization/billing",
+                detail=f"API quota/payment issue: {err_msg[:200]}. Please check your billing at https://platform.openai.com/settings/organization/billing",
             )
+        logger.exception("API error during critic pass")
+        raise HTTPException(status_code=500, detail=f"API error during critic pass: {err_msg[:300]}")
+    except APIError as e:
+        err_msg = str(e)
+        logger.exception("OpenAI API error during critic pass")
+        raise HTTPException(status_code=500, detail=f"OpenAI API error: {err_msg[:300]}")
+    except Exception as e:
+        err_msg = str(e)
         logger.exception("Critic pass failed")
         raise HTTPException(status_code=500, detail=f"Critic pass failed: {err_msg[:300]}")
 
@@ -215,13 +284,18 @@ async def run_audit(request: AuditRequest):
     html_path = output_dir / "report.html"
     write_html_report(html_path, html_content)
 
-    # Audit JSON
+    # Audit JSON (includes classification for downstream consumers)
     audit_path = output_dir / "audit.json"
     with open(audit_path, "w", encoding="utf-8") as f:
         json.dump(
-            {"scorecard": scorecard.model_dump(), "findings": [x.model_dump() for x in findings]},
+            {
+                "classification": classification.model_dump(),
+                "scorecard": scorecard.model_dump(mode="json"),
+                "findings": [x.model_dump(mode="json") for x in findings],
+            },
             f,
             indent=2,
+            default=str,  # fallback: stringify datetime and other non-serialisable types
         )
 
     return AuditResponse(

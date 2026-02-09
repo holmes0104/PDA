@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from openai import OpenAI
+from openai import APIError, APIStatusError, OpenAI, RateLimitError
 from pydantic import BaseModel
 
 from pda.llm.base import LLMProvider
@@ -16,19 +16,24 @@ class OpenAIProvider:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gpt-4o",
+        model: str = "gpt-5.2",
     ):
         self._client = OpenAI(api_key=api_key)
         self._model = model
 
     def complete(self, prompt: str, **kwargs: Any) -> str:
-        response = self._client.chat.completions.create(
-            model=kwargs.get("model") or self._model,
-            messages=[{"role": "user", "content": prompt}],
-            **{k: v for k, v in kwargs.items() if k not in ("model",)},
-        )
-        msg = response.choices[0].message
-        return msg.content or ""
+        try:
+            response = self._client.chat.completions.create(
+                model=kwargs.get("model") or self._model,
+                messages=[{"role": "user", "content": prompt}],
+                **{k: v for k, v in kwargs.items() if k not in ("model",)},
+            )
+            msg = response.choices[0].message
+            return msg.content or ""
+        except (RateLimitError, APIStatusError, APIError) as e:
+            # Re-raise OpenAI exceptions as-is so they can be caught by route handlers
+            # The route handlers will check status_code and error messages
+            raise
 
     def complete_structured(self, prompt: str, schema: type[BaseModel], **kwargs: Any) -> BaseModel:
         instruction = (
