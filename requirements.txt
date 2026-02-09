@@ -14,7 +14,8 @@ chromadb>=0.4
 jinja2>=3.1
 pyyaml>=6.0
 markdown>=3.5
-xhtml2pdf>=0.2.11
+# xhtml2pdf optional: requires pycairo/C compiler in Docker; install separately if needed for PDF report export
+# pip install xhtml2pdf
 rich>=13.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
