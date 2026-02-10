@@ -14,13 +14,13 @@ chromadb>=0.4
 jinja2>=3.1
 pyyaml>=6.0
 markdown>=3.5
-# xhtml2pdf optional: requires pycairo/C compiler in Docker; install separately if needed for PDF report export
-# pip install xhtml2pdf
+xhtml2pdf>=0.2.13
 rich>=13.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 beautifulsoup4>=4.12
 
-# Optional: pgvector backend — pip install 'psycopg[binary]' pgvector
-# Optional (tests + sample PDF): pip install reportlab
+# pgvector backend (for Supabase/Postgres when PDA_VECTOR_BACKEND=pgvector)
+psycopg[binary]>=3.1
+pgvector>=0.2.0
